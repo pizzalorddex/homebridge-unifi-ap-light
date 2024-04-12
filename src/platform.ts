@@ -1,6 +1,6 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge'
 
-import Axios, { AxiosInstance } from 'axios'
+import Axios, { AxiosInstance, AxiosError } from 'axios' // Ensure AxiosError is imported
 
 import jwt from 'jsonwebtoken'
 import https from 'https'
@@ -11,170 +11,198 @@ import { getAccessPoints } from './unifi'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings'
 
 interface UnifiWAPLightConfig extends PlatformConfig {
-	host: string // "<hostname>:<port>",
-	username: string // "<username>",
-	password: string // "<password>"
-	includeIds?: string[]
-	excludeIds?: string[]
+    host: string // Hostname and port, e.g., "localhost:8443"
+    username: string // Username for authentication
+    password: string // Password for authentication
+    includeIds?: string[] // Optional array of IDs to specifically include
+    excludeIds?: string[] // Optional array of IDs to specifically exclude
 }
 
 /**
- * HomebridgePlatform
- * This class is the main constructor for your plugin, this is where you should
- * parse the user config and discover/register accessories with Homebridge.
+ * Manages authentication sessions and re-authentication.
+ */
+class SessionManager {
+	private axiosInstance: AxiosInstance
+	private host: string
+	private username: string
+	private password: string
+	private log: Logger
+
+	constructor(host: string, username: string, password: string, log: Logger) {
+		this.host = host
+		this.username = username
+		this.password = password
+		this.log = log
+
+		// Initialize Axios instance with baseURL
+		this.axiosInstance = Axios.create({
+			baseURL: `https://${host}/api`,
+			httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+		})
+	}
+
+	/**
+	 * Attempts to authenticate using the primary method, with a fallback to the secondary method upon failure.
+	 */
+	async authenticate() {
+		try {
+			await this.primaryAuthMethod()
+		} catch (error) {
+			this.log.debug('Primary authentication method failed, attempting secondary.')
+			try {
+				await this.secondaryAuthMethod()
+			} catch (fallbackError) {
+				this.log.error(`Both authentication methods failed: ${fallbackError}`)
+			}
+		}
+	}
+
+	private async primaryAuthMethod() {
+		const response = await this.axiosInstance.post('/login', {
+			username: this.username,
+			password: this.password,
+		})
+
+		if (response.headers['set-cookie']) {
+			this.axiosInstance.defaults.headers['Cookie'] = response.headers['set-cookie'].join('; ')
+			this.log.debug('Authentication with primary method successful.')
+		} else {
+			throw new Error('Primary authentication method failed: No cookies found.')
+		}
+	}
+
+	private async secondaryAuthMethod() {
+		const { headers } = await this.axiosInstance.post('/auth/login', {
+			username: this.username,
+			password: this.password,
+			rememberMe: true,
+		})
+
+		if(!headers['set-cookie']) {
+			throw new Error('Secondary authentication method failed: No cookies found.')
+		}
+
+		const cookies = cookie.parse(headers['set-cookie'].join('; '))
+		const token = cookies['TOKEN']
+		const decoded = jwt.decode(token)
+		const csrfToken = decoded ? decoded.csrfToken : null
+
+		if (!csrfToken) {
+			throw new Error('Secondary authentication method failed: CSRF token not found.')
+		}
+
+		// Assuming CSRF token needs to be sent as a header for subsequent requests
+		this.axiosInstance.defaults.headers['X-Csrf-Token'] = csrfToken
+		this.axiosInstance.defaults.headers['Cookie'] += `; TOKEN=${token}` // Append TOKEN cookie
+        
+		this.log.debug('Authentication with secondary method successful.')
+	}
+
+	/**
+	 * Handles API requests, automatically re-authenticating if necessary.
+	 */
+	async request(config) {
+		try {
+			return await this.axiosInstance(config)
+		} catch (error) {
+			const axiosError = error as AxiosError
+			if (axiosError.response && axiosError.response.status === 401) {
+				this.log.debug('Session expired, attempting to re-authenticate...')
+				await this.authenticate()
+				return await this.axiosInstance(config) // Retry the request after re-authentication
+			} else {
+				throw axiosError
+			}
+		}
+	}
+}
+
+/**
+ * Main class for the Homebridge platform plugin, handling device discovery and accessory registration.
  */
 export class UnifiWAPLight implements DynamicPlatformPlugin {
+	public sessionManager: SessionManager
 	public readonly Service: typeof Service = this.api.hap.Service
 	public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic
 
-	// this is used to track restored cached accessories
+	// Cache for restored accessories to prevent duplicates
 	public readonly accessories: PlatformAccessory[] = []
 
-	axios?: AxiosInstance
-	authAxios?: AxiosInstance
-
 	constructor(
-		public readonly log: Logger,
-		public readonly config: PlatformConfig,
-		public readonly api: API,
+        public readonly log: Logger,
+        public readonly config: PlatformConfig,
+        public readonly api: API,
 	) {
-		this.log.debug('Finished initializing platform:', (this.config as UnifiWAPLightConfig).name)
+		// Assert and assign the config to this.config directly as UnifiWAPLightConfig
+		this.config = config as UnifiWAPLightConfig
+		this.log.debug('Initializing UniFi WAP Light platform:', this.config.name)
 
-		// When this event is fired it means Homebridge has restored all cached accessories from disk.
-		// Dynamic Platform plugins should only register new accessories after this event was fired,
-		// in order to ensure they weren't added to homebridge already. This event can also be used
-		// to start discovery of new accessories.
+		this.sessionManager = new SessionManager(this.config.host, this.config.username, this.config.password, this.log)
+
 		this.api.on('didFinishLaunching', () => {
-			log.debug('Executed didFinishLaunching callback')
-			// run the method to discover / register your devices as accessories
+			this.log.debug('Finished loading, starting device discovery.')
 			this.discoverDevices()
 		})
 	}
 
 	/**
-	 * This function is invoked when homebridge restores cached accessories from disk at startup.
-	 * It should be used to setup event handlers for characteristics and update respective values.
+	 * Restore cached accessories from disk at startup.
+	 * This is primarily used for setting up event handlers for accessory characteristics and updating their values as needed.
 	 */
 	configureAccessory(accessory: PlatformAccessory) {
 		this.log.info('Loading accessory from cache:', accessory.displayName)
 
-		// add the restored accessory to the accessories cache so we can track if it has already been registered
+		// Add the restored accessory to the accessories cache to track if it was previously registered
 		this.accessories.push(accessory)
 	}
 
-	async auth() {
-		this.authAxios = Axios.create({
-			baseURL: `https://${(this.config as UnifiWAPLightConfig).host}/api`,
-			httpsAgent: new https.Agent({
-				rejectUnauthorized: false,
-			}),
-		})
-
-		const { headers } = await this.authAxios.post('/auth/login', {
-			username: (this.config as UnifiWAPLightConfig).username,
-			password: (this.config as UnifiWAPLightConfig).password,
-			rememberMe: true,
-		})
-
-		if(!headers['set-cookie']) {
-			return
-		}
-
-		const { TOKEN: token } = cookie.parse(headers['set-cookie'].join(';'))
-
-		const { csrfToken } = jwt.decode(token)
-
-		this.axios = Axios.create({
-			baseURL: `https://${(this.config as UnifiWAPLightConfig).host}`,
-			headers: {
-				'Cookie': cookie.serialize('TOKEN', token),
-				'X-Csrf-Token': csrfToken,
-			},
-			httpsAgent: new https.Agent({
-				rejectUnauthorized: false,
-			}),
-		})
-	}
-
 	/**
-	 * This is an example method showing how to register discovered accessories.
-	 * Accessories must only be registered once, previously created accessories
-	 * must not be registered again to prevent "duplicate UUID" errors.
-	 */
+ * Discovers and registers new devices as HomeKit accessories based on the UniFi controller data.
+ */
 	async discoverDevices() {
-		await this.auth()
+		// Authenticate with the UniFi controller before attempting to discover devices.
+		await this.sessionManager.authenticate()
 
-		if(!this.axios) {
-			this.log.warn('Auth failed')
-			return
-		}
+		try {
+			// Fetch the list of UniFi access points from the controller.
+			const accessPoints = await getAccessPoints(this.sessionManager.request.bind(this.sessionManager))
 
-		const accessPoints = await getAccessPoints(this.axios)
+			// Process each access point to determine if it should be included or excluded.
+			accessPoints.forEach(accessPoint => {
+				// Generate a unique identifier for the HomeKit accessory based on the access point ID.
+				const uuid = this.api.hap.uuid.generate(accessPoint._id)
 
-		// loop over the discovered devices and register each one if it has not already been registered
-		for (const accessPoint of accessPoints) {
+				// Determine inclusion by checking against includeIds, or include all if not set.
+				const isIncluded = this.config.includeIds?.length ? this.config.includeIds.includes(accessPoint._id) : true
+				// Determine exclusion by checking against excludeIds, defaulting to false if not set.
+				const isExcluded = this.config.excludeIds?.includes(accessPoint._id) || false
 
-			// generate a unique id for the accessory this should be generated from
-			// something globally unique, but constant, for example, the device serial
-			// number or MAC address
-			const uuid = this.api.hap.uuid.generate(accessPoint._id)
+				// Find if there is already an accessory registered in Homebridge with the same UUID.
+				const existingAccessory = this.accessories.find(acc => acc.UUID === uuid)
 
-			const doesIncludeIdsExist = ((this.config as UnifiWAPLightConfig).includeIds?.length || 0) > 0
-			const doesAccessPointExistInIncludeIds = (this.config as UnifiWAPLightConfig).includeIds?.includes(accessPoint._id)
-			const doesAccessPointExistInExcludeIds = (this.config as UnifiWAPLightConfig).excludeIds?.includes(accessPoint._id)
-			const include = (doesIncludeIdsExist ? doesAccessPointExistInIncludeIds : true) && !doesAccessPointExistInExcludeIds
-
-			// see if an accessory with the same uuid has already been registered and restored from
-			// the cached devices we stored in the `configureAccessory` method above
-			const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid)
-
-			if (existingAccessory) {
-				// it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-				// remove platform accessories when no longer present
-				if(!include) {
-					this.log.info(`Removing existing accessory from cache, since it is present in excludeIds or not present in includeIds: ${existingAccessory.displayName} (${accessPoint._id})`)
-
-					this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory])
-
-					continue
+				if (existingAccessory) {
+					if (!isIncluded || isExcluded) {
+						// If the accessory is not included or explicitly excluded, remove it from Homebridge.
+						this.log.info(`Removing accessory from cache due to exclusion settings: ${existingAccessory.displayName} (${accessPoint._id})`)
+						this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory])
+					} else {
+						// If the accessory exists and is still included, restore it from cache without re-registering.
+						this.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id})`)
+						new UniFiWAP(this, existingAccessory)
+					}
+				} else if (isIncluded && !isExcluded) {
+					// If the accessory is new, included, and not excluded, register it as a new accessory.
+					this.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id})`)
+					const newAccessory = new this.api.platformAccessory(accessPoint.name, uuid)
+					newAccessory.context.accessPoint = accessPoint
+					new UniFiWAP(this, newAccessory)
+					this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [newAccessory])
 				}
-
-				// the accessory already exists
-				this.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id})`)
-
-				// if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-				// existingAccessory.context.device = device;
-				// this.api.updatePlatformAccessories([existingAccessory]);
-
-				// create the accessory handler for the restored accessory
-				// this is imported from `platformAccessory.ts`
-				new UniFiWAP(this, existingAccessory)
-
-				continue
-			}
-
-			if(!include) {
-				this.log.info(`Found new accessory, but not adding due to its presence in excludeIds or absence in includeIds: ${accessPoint.name} (${accessPoint._id})`)
-
-				continue
-			}
-
-			// the accessory does not yet exist, so we need to create it
-			this.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id})`)
-
-			// create a new accessory
-			const accessory = new this.api.platformAccessory(accessPoint.name, uuid)
-
-			// store a copy of the device object in the `accessory.context`
-			// the `context` property can be used to store any data about the accessory you may need
-			accessory.context.accessPoint = accessPoint
-
-			// create the accessory handler for the newly create accessory
-			// this is imported from `platformAccessory.ts`
-			new UniFiWAP(this, accessory)
-
-			// link the accessory to your platform
-			this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory])
+			})
+		} catch (error) {
+			const axiosError = error as AxiosError
+			// Log detailed errors if the device discovery fails.
+			this.log.error(`Device discovery failed: ${axiosError.message}`)
 		}
 	}
 }
