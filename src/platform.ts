@@ -6,11 +6,11 @@ import jwt from 'jsonwebtoken'
 import https from 'https'
 import cookie from 'cookie'
 
-import { UniFiWAP } from './platformAccessory'
+import { UniFiAP } from './platformAccessory'
 import { getAccessPoints } from './unifi'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings'
 
-interface UnifiWAPLightConfig extends PlatformConfig {
+interface UnifiAPLightConfig extends PlatformConfig {
     host: string // Hostname and port, e.g., "localhost:8443"
     username: string // Username for authentication
     password: string // Password for authentication
@@ -120,7 +120,7 @@ class SessionManager {
 /**
  * Main class for the Homebridge platform plugin, handling device discovery and accessory registration.
  */
-export class UnifiWAPLight implements DynamicPlatformPlugin {
+export class UnifiAPLight implements DynamicPlatformPlugin {
 	public sessionManager: SessionManager
 	public readonly Service: typeof Service = this.api.hap.Service
 	public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic
@@ -133,9 +133,9 @@ export class UnifiWAPLight implements DynamicPlatformPlugin {
         public readonly config: PlatformConfig,
         public readonly api: API,
 	) {
-		// Assert and assign the config to this.config directly as UnifiWAPLightConfig
-		this.config = config as UnifiWAPLightConfig
-		this.log.debug('Initializing UniFi WAP Light platform:', this.config.name)
+		// Assert and assign the config to this.config directly as UnifiAPLightConfig
+		this.config = config as UnifiAPLightConfig
+		this.log.debug('Initializing UniFi AP Light platform:', this.config.name)
 
 		this.sessionManager = new SessionManager(this.config.host, this.config.username, this.config.password, this.log)
 
@@ -188,14 +188,14 @@ export class UnifiWAPLight implements DynamicPlatformPlugin {
 					} else {
 						// If the accessory exists and is still included, restore it from cache without re-registering.
 						this.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id})`)
-						new UniFiWAP(this, existingAccessory)
+						new UniFiAP(this, existingAccessory)
 					}
 				} else if (isIncluded && !isExcluded) {
 					// If the accessory is new, included, and not excluded, register it as a new accessory.
 					this.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id})`)
 					const newAccessory = new this.api.platformAccessory(accessPoint.name, uuid)
 					newAccessory.context.accessPoint = accessPoint
-					new UniFiWAP(this, newAccessory)
+					new UniFiAP(this, newAccessory)
 					this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [newAccessory])
 				}
 			})

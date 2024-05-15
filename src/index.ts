@@ -1,11 +1,11 @@
 import { API } from 'homebridge'
 
 import { PLATFORM_NAME } from './settings'
-import { UnifiWAPLight } from './platform'
+import { UnifiAPLight } from './platform'
 
 /**
  * This method registers the platform with Homebridge
  */
 export = (api: API) => {
-	api.registerPlatform(PLATFORM_NAME, UnifiWAPLight)
+	api.registerPlatform(PLATFORM_NAME, UnifiAPLight)
 };
