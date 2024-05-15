@@ -1,35 +1,37 @@
 import { AxiosError } from 'axios'
 
-// Define a generic type for a UniFi Wireless Access Point (WAP).
-type UniFiWAP = any
+// Define a generic type for a UniFi Wireless Access Point (AP).
+type UniFiAP = any
 
 /**
- * Retrieves a specific UniFi WAP by its ID.
+ * Retrieves a specific UniFi AP by its ID.
  * 
- * @param {string} id The ID of the WAP to retrieve.
+ * @param {string} id The ID of the AP to retrieve.
  * @param {Function} requestFunction The function to execute the API request.
- * @returns {Promise<UniFiWAP | undefined>} A promise that resolves to the WAP object, or undefined if not found.
+ * @returns {Promise<UniFiAP | undefined>} A promise that resolves to the AP object, or undefined if not found.
  */
-export async function getAccessPoint(id: string, requestFunction: (config: any) => Promise<any>): Promise<UniFiWAP | undefined> {
+export async function getAccessPoint(id: string, requestFunction: (config: any) => Promise<any>): Promise<UniFiAP | undefined> {
 	const accessPoints = await getAccessPoints(requestFunction)
-	return accessPoints.find((ap: UniFiWAP) => ap._id === id)
+	return accessPoints.find((ap: UniFiAP) => ap._id === id)
 }
 
 /**
- * Fetches all UniFi WAPs available in the controller.
- * 
+* Fetches all UniFi APs available in the controller.
+ * Includes devices of type 'uap' and 'udm', but filters 'udm' to only include model 'UDM'.
  * @param {Function} request The function to execute the API request.
- * @returns {Promise<UniFiWAP[]>} A promise that resolves to an array of WAP objects.
+ * @returns {Promise<UniFiAP[]>} A promise that resolves to an array of AP objects.
  * Attempts to fetch data from multiple endpoints to ensure compatibility across different UniFi Controller versions.
  */
-export async function getAccessPoints(request: (config: any) => Promise<any>): Promise<UniFiWAP[]> {
+export async function getAccessPoints(request: (config: any) => Promise<any>): Promise<UniFiAP[]> {
 	const endpoints = ['/s/default/stat/device', '/proxy/network/api/s/default/stat/device']
 	for (const endpoint of endpoints) {
 		try {
 			const response = await request({ url: endpoint, method: 'get' })
 			if (response && response.data && response.data.data) {
-				// Filter and return only devices of type 'uap' (UniFi Access Points).
-				return response.data.data.filter((device: any) => device.type === 'uap')
+				// Filter and return only devices of type 'uap' and 'udm'
+				return response.data.data.filter((device: any) => 
+					(device.type === 'uap' || (device.type === 'udm' && device.model === 'UDM'))
+				)
 			} else {
 				throw new Error('API returned no data or unexpected data structure')
 			}

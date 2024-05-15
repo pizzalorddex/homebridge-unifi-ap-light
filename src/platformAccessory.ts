@@ -1,20 +1,20 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
 import { AxiosError } from 'axios'
 
-import { UnifiWAPLight } from './platform'
+import { UnifiAPLight } from './platform'
 import { getAccessPoint } from './unifi'
 
 /**
  * This class represents a single platform accessory (e.g., a UniFi access point) for Homebridge.
  * It handles the lifecycle and HomeKit interactions for individual accessories.
  */
-export class UniFiWAP {
+export class UniFiAP {
 	// The underlying device object containing details like serial number and model
 	accessPoint: any
 	private service: Service
 
 	constructor(
-    private readonly platform: UnifiWAPLight,
+    private readonly platform: UnifiAPLight,
     private readonly accessory: PlatformAccessory,
 	) {
 		// Initialize accessory information from the configuration.

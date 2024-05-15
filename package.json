@@ -1,15 +1,15 @@
 {
   "displayName": "UniFi Wireless Access Point Light",
-  "name": "homebridge-unifi-wap-light",
-  "version": "1.2.0",
-  "description": "Control the blue ring on your UniFi WAPs.",
+  "name": "homebridge-unifi-ap-light",
+  "version": "1.2.1",
+  "description": "Control the blue ring on your UniFi APs.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/darnfish/homebridge-unifi-wap-light.git"
+    "url": "https://github.com/pizzalorddex/homebridge-unifi-ap-light.git"
   },
   "bugs": {
-    "url": "https://github.com/darnfish/homebridge-unifi-wap-light/issues"
+    "url": "https://github.com/pizzalorddex/homebridge-unifi-ap-light/issues"
   },
   "engines": {
     "node": ">=14.18.1",
