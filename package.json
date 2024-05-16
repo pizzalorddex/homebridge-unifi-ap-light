@@ -1,5 +1,5 @@
 {
-  "displayName": "UniFi Wireless Access Point Light",
+  "displayName": "UniFi Access Point Light",
   "name": "homebridge-unifi-ap-light",
   "version": "1.2.2",
   "description": "Control the blue LED ring on your UniFi APs!",
