@@ -56,7 +56,7 @@ class SessionManager {
 	}
 
 	private async primaryAuthMethod() {
-		const response = await this.axiosInstance.post('/login', {
+		const response = await this.axiosInstance.post('/api/login', {
 			username: this.username,
 			password: this.password,
 		})
@@ -70,7 +70,7 @@ class SessionManager {
 	}
 
 	private async secondaryAuthMethod() {
-		const { headers } = await this.axiosInstance.post('/auth/login', {
+		const { headers } = await this.axiosInstance.post('/api/auth/login', {
 			username: this.username,
 			password: this.password,
 			rememberMe: true,

@@ -23,7 +23,7 @@ export async function getAccessPoint(id: string, requestFunction: (config: any) 
  * Attempts to fetch data from multiple endpoints to ensure compatibility across different UniFi Controller versions.
  */
 export async function getAccessPoints(request: (config: any) => Promise<any>): Promise<UniFiAP[]> {
-	const endpoints = ['/s/default/stat/device', '/proxy/network/api/s/default/stat/device']
+	const endpoints = ['/api/s/default/stat/device', '/proxy/network/api/s/default/stat/device']
 	for (const endpoint of endpoints) {
 		const config = { url: endpoint, method: 'get' }
 		console.log(`Requesting URL: ${config.url}`)

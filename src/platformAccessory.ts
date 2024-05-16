@@ -53,7 +53,7 @@ export class UniFiAP {
 			led_override: value ? 'on' : 'off',
 		}
 		const endpoints = [
-			`/s/default/rest/device/${this.accessory.context.accessPoint._id}`,
+			`/api/s/default/rest/device/${this.accessory.context.accessPoint._id}`,
 			`/proxy/network/api/s/default/rest/device/${this.accessory.context.accessPoint._id}`
 		]
 	
