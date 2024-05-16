@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "UnifiWAPLight",
+  "pluginAlias": "UnifiAPLight",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -9,7 +9,7 @@
         "title": "Name",
         "type": "string",
         "required": true,
-        "default": "UniFi WAP Lights"
+        "default": "UniFi AP Lights"
       }
     }
   }
