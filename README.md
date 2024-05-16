@@ -9,7 +9,11 @@ Control the light rings on your UniFi Access Point(s) with HomeKit!
 - **API Session Manager:** Ensures the connection to the API doesn't break down due to cookie/token changes.
 
 ## Installation
-Search for `homebridge-unifi-ap-light`, or run:
+Search for `homebridge-unifi-ap-light`, or run either:
+```sh
+npm install -g homebridge-unifi-ap-light
+```
+Or
 ```sh
 yarn global add homebridge-unifi-ap-light
 ```
@@ -26,10 +30,18 @@ Add the following to your `config.json`:
   "password": "<password>"
 }
 ```
+
+- If your UniFi Controller is self-hosted (running on other hardware, like a Raspberry Pi), include the port number in the host field (e.g., `"host": "192.168.1.1:8443"`).
+- If your UniFi Controller is running on a UniFi device (like a UDM or UDR), the port number is not necessary (e.g., `"host": "192.168.1.1"`).
+
 ## Optional Configuration
 You can control which access points are exposed to HomeKit using include / exclude IDs options:
 ```json
 {
+  "name": "UniFi AP Lights",
+  "platform": "UnifiAPLight",
+  "host": "<hostname>:<port>",
+  "username": "<username>",
   "password": "<password>",
   "includeIds": ["<id1>", "<id2>"],
   "excludeIds": ["<id3>"]

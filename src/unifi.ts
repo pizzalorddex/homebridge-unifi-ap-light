@@ -30,7 +30,7 @@ export async function getAccessPoints(request: (config: any) => Promise<any>): P
 			if (response && response.data && response.data.data) {
 				// Filter and return only devices of type 'uap' and 'udm'
 				return response.data.data.filter((device: any) => 
-					(device.type === 'uap' || (device.type === 'udm' && device.model === 'UDM'))
+					(device.type === 'uap' || (device.type === 'udm' && (device.model === 'UDM' || device.model === 'UDR')))
 				)
 			} else {
 				throw new Error('API returned no data or unexpected data structure')

@@ -35,7 +35,7 @@
         "items": {
           "type": "string"
         },
-        "description": "A comma seperated list of device IDs to include."
+        "description": "A list of device IDs to include."
       },
       "excludeIds": {
         "title": "Exclude Device IDs",
@@ -43,7 +43,7 @@
         "items": {
           "type": "string"
         },
-        "description": "A comma seperated list of device IDs to exclude."
+        "description": "A list of device IDs to exclude."
       }
     }
   }
