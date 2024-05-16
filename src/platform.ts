@@ -1,7 +1,5 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge'
-
-import Axios, { AxiosInstance, AxiosError } from 'axios' // Ensure AxiosError is imported
-
+import Axios, { AxiosInstance, AxiosError } from 'axios'
 import jwt from 'jsonwebtoken'
 import https from 'https'
 import cookie from 'cookie'

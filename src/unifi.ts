@@ -25,6 +25,8 @@ export async function getAccessPoint(id: string, requestFunction: (config: any) 
 export async function getAccessPoints(request: (config: any) => Promise<any>): Promise<UniFiAP[]> {
 	const endpoints = ['/s/default/stat/device', '/proxy/network/api/s/default/stat/device']
 	for (const endpoint of endpoints) {
+		const config = { url: endpoint, method: 'get' }
+		console.log(`Requesting URL: ${config.url}`)
 		try {
 			const response = await request({ url: endpoint, method: 'get' })
 			if (response && response.data && response.data.data) {
@@ -39,6 +41,7 @@ export async function getAccessPoints(request: (config: any) => Promise<any>): P
 			const axiosError = error as AxiosError
 			// Continue trying the next endpoint in case the current one is not found (404).
 			if (axiosError.response && axiosError.response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
+				console.debug(`Endpoint not found: ${endpoint}, trying next endpoint`)
 				continue
 			} else {
 				// Rethrow the error if it's not a 404 or if it's the last endpoint.
