@@ -34,7 +34,7 @@ class SessionManager {
 
 		// Initialize Axios instance with baseURL
 		this.axiosInstance = Axios.create({
-			baseURL: `https://${host}/api`,
+			baseURL: `https://${host}`,
 			httpsAgent: new https.Agent({ rejectUnauthorized: false }),
 		})
 	}
