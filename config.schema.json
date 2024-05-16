@@ -10,6 +10,40 @@
         "type": "string",
         "required": true,
         "default": "UniFi AP Lights"
+      },
+      "host": {
+        "title": "Host",
+        "type": "string",
+        "required": true,
+        "description": "The hostname or IP address of the UniFi Controller, including port if necessary (e.g., '192.168.1.1:8443')."
+      },
+      "username": {
+        "title": "Username",
+        "type": "string",
+        "required": true,
+        "description": "The username for the UniFi Controller."
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "required": true,
+        "description": "The password for the UniFi Controller."
+      },
+      "includeIds": {
+        "title": "Include Device IDs",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "A comma seperated list of device IDs to include."
+      },
+      "excludeIds": {
+        "title": "Exclude Device IDs",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "A comma seperated list of device IDs to exclude."
       }
     }
   }
