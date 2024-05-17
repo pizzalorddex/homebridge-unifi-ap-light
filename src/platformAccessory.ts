@@ -21,7 +21,7 @@ export class UniFiAP {
 		const accessoryInformationService = this.accessory.getService(this.platform.Service.AccessoryInformation)
 		if (accessoryInformationService) {
 			accessoryInformationService
-				.setCharacteristic(this.platform.Characteristic.Manufacturer, 'Ubuquiti')
+				.setCharacteristic(this.platform.Characteristic.Manufacturer, 'Ubiquiti')
 				.setCharacteristic(this.platform.Characteristic.Model, this.accessory.context.accessPoint.model)
 				.setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.accessPoint.serial)
 				.setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.accessory.context.accessPoint.version)
@@ -45,18 +45,18 @@ export class UniFiAP {
 	}
 
 	/**
-	 * Handles "SET" requests from HomeKit to change the state of the accessory, such as turning a light on or off.
-	 * @param {CharacteristicValue} value - The new state from HomeKit.
-	 */
+   * Handles "SET" requests from HomeKit to change the state of the accessory, such as turning a light on or off.
+   * @param {CharacteristicValue} value - The new state from HomeKit.
+   */
 	async setOn(value: CharacteristicValue) {
-		const data = {
-			led_override: value ? 'on' : 'off',
-		}
+		const isUdmDevice = this.accessory.context.accessPoint.type === 'udm'
+		const data = isUdmDevice ? { ledSettings: { enabled: value } } : { led_override: value ? 'on' : 'off' }
+
 		const endpoints = [
 			`/api/s/default/rest/device/${this.accessory.context.accessPoint._id}`,
 			`/proxy/network/api/s/default/rest/device/${this.accessory.context.accessPoint._id}`
 		]
-	
+
 		for (const endpoint of endpoints) {
 			try {
 				await this.platform.sessionManager.request({
@@ -79,15 +79,15 @@ export class UniFiAP {
 	}
 
 	/**
-	 * Handles "GET" requests from HomeKit to retrieve the current state of the accessory, such as whether a light is on or off.
-	 * Should return ASAP to prevent an unresponsive status.
-	 * @returns {Promise<CharacteristicValue>} - The current state of the accessory.
-	 */
+   * Handles "GET" requests from HomeKit to retrieve the current state of the accessory, such as whether a light is on or off.
+   * Should return ASAP to prevent an unresponsive status.
+   * @returns {Promise<CharacteristicValue>} - The current state of the accessory.
+   */
 	async getOn(): Promise<CharacteristicValue> {
 		try {
 			const accessPoint = await getAccessPoint(this.accessory.context.accessPoint._id, this.platform.sessionManager.request.bind(this.platform.sessionManager))
 			if (accessPoint) {
-				const isOn = accessPoint.led_override === 'on'
+				const isOn = accessPoint.type === 'udm' ? accessPoint.ledSettings.enabled : accessPoint.led_override === 'on'
 				this.platform.log.debug(`Retrieved LED state for ${this.accessory.context.accessPoint.name}: ${isOn ? 'on' : 'off'}`)
 				return isOn
 			}
