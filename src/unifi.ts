@@ -25,8 +25,6 @@ export async function getAccessPoint(id: string, requestFunction: (config: any) 
 export async function getAccessPoints(request: (config: any) => Promise<any>): Promise<UniFiAP[]> {
 	const endpoints = ['/api/s/default/stat/device', '/proxy/network/api/s/default/stat/device']
 	for (const endpoint of endpoints) {
-		const config = { url: endpoint, method: 'get' }
-		console.log(`Requesting URL: ${config.url}`)
 		try {
 			const response = await request({ url: endpoint, method: 'get' })
 			if (response && response.data && response.data.data) {
