@@ -1,5 +1,5 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
-import { AxiosError } from 'axios'
+import { AxiosError, AxiosResponse } from 'axios'
 
 import { UnifiAPLight } from './platform'
 import { getAccessPoint } from './unifi'
@@ -59,19 +59,27 @@ export class UniFiAP {
 
 		for (const endpoint of endpoints) {
 			try {
-				await this.platform.sessionManager.request({
+				const response: AxiosResponse = await this.platform.sessionManager.request({
 					method: 'put',
 					url: endpoint,
 					data: data,
 				})
-				this.platform.log.debug(`Successfully set LED state for ${this.accessory.context.accessPoint.name} to ${value ? 'on' : 'off'}.`)
-				return
+				if (response.status === 200) {
+					this.platform.log.debug(`Successfully set LED state for ${this.accessory.context.accessPoint.name} to ${value ? 'on' : 'off'}.`)
+					return
+				} else {
+					this.platform.log.error(`Failed to set LED state for ${this.accessory.context.accessPoint.name}: Unexpected response status ${response.status}`)
+				}
 			} catch (error) {
 				const axiosError = error as AxiosError
 				if (axiosError.response && axiosError.response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
 					continue // Try the next endpoint in case of a 404 error
 				} else {
 					this.platform.log.error(`Failed to set LED state for ${this.accessory.context.accessPoint.name}: ${error}`)
+					if (axiosError.response) {
+						this.platform.log.error(`Response status: ${axiosError.response.status}`)
+						this.platform.log.error(`Response data: ${JSON.stringify(axiosError.response.data)}`)
+					}
 					break // Exit loop on other errors
 				}
 			}
@@ -87,11 +95,29 @@ export class UniFiAP {
 		try {
 			const accessPoint = await getAccessPoint(this.accessory.context.accessPoint._id, this.platform.sessionManager.request.bind(this.platform.sessionManager))
 			if (accessPoint) {
-				const isOn = accessPoint.type === 'udm' ? accessPoint.ledSettings.enabled : accessPoint.led_override === 'on'
-				this.platform.log.debug(`Retrieved LED state for ${this.accessory.context.accessPoint.name}: ${isOn ? 'on' : 'off'}`)
-				return isOn
+				if (accessPoint.type === 'udm') {
+					if (accessPoint.ledSettings) {
+						if (typeof accessPoint.ledSettings.enabled !== 'undefined') {
+							const isOn = accessPoint.ledSettings.enabled
+							this.platform.log.debug(`Retrieved LED state for ${this.accessory.context.accessPoint.name}: ${isOn ? 'on' : 'off'}`)
+							return isOn
+						} else {
+							this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${this.accessory.context.accessPoint.name}`)
+							return false
+						}
+					} else {
+						this.platform.log.error(`The 'ledSettings' property is undefined for ${this.accessory.context.accessPoint.name}`)
+						return false
+					}
+				} else {
+					const isOn = accessPoint.led_override === 'on'
+					this.platform.log.debug(`Retrieved LED state for ${this.accessory.context.accessPoint.name}: ${isOn ? 'on' : 'off'}`)
+					return isOn
+				}
+			} else {
+				this.platform.log.error(`Failed to retrieve LED state for ${this.accessory.context.accessPoint.name}: Access point not found`)
+				return false
 			}
-			return false
 		} catch (error) {
 			this.platform.log.error(`Failed to retrieve LED state for ${this.accessory.context.accessPoint.name}: ${error}`)
 			return false
