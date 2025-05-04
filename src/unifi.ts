@@ -1,4 +1,5 @@
 import { AxiosError } from 'axios'
+import { Logger } from 'homebridge'
 
 // Define a generic type for a UniFi Wireless Access Point (AP).
 type UniFiAP = any
@@ -8,10 +9,11 @@ type UniFiAP = any
  * 
  * @param {string} id The ID of the AP to retrieve.
  * @param {Function} requestFunction The function to execute the API request.
+ * @param {Logger} log The Homebridge logger instance.
  * @returns {Promise<UniFiAP | undefined>} A promise that resolves to the AP object, or undefined if not found.
  */
-export async function getAccessPoint(id: string, requestFunction: (config: any) => Promise<any>): Promise<UniFiAP | undefined> {
-	const accessPoints = await getAccessPoints(requestFunction)
+export async function getAccessPoint(id: string, requestFunction: (config: any) => Promise<any>, log: Logger): Promise<UniFiAP | undefined> {
+	const accessPoints = await getAccessPoints(requestFunction, log)
 	return accessPoints.find((ap: UniFiAP) => ap._id === id)
 }
 
@@ -19,10 +21,11 @@ export async function getAccessPoint(id: string, requestFunction: (config: any) 
 * Fetches all UniFi APs available in the controller.
  * Includes devices of type 'uap' and 'udm', but filters 'udm' to only include model 'UDM'.
  * @param {Function} request The function to execute the API request.
+ * @param {Logger} log The Homebridge logger instance.
  * @returns {Promise<UniFiAP[]>} A promise that resolves to an array of AP objects.
  * Attempts to fetch data from multiple endpoints to ensure compatibility across different UniFi Controller versions.
  */
-export async function getAccessPoints(request: (config: any) => Promise<any>): Promise<UniFiAP[]> {
+export async function getAccessPoints(request: (config: any) => Promise<any>, log: Logger): Promise<UniFiAP[]> {
 	const endpoints = ['/api/s/default/stat/device', '/proxy/network/api/s/default/stat/device']
 	for (const endpoint of endpoints) {
 		try {
@@ -39,7 +42,7 @@ export async function getAccessPoints(request: (config: any) => Promise<any>): P
 			const axiosError = error as AxiosError
 			// Continue trying the next endpoint in case the current one is not found (404).
 			if (axiosError.response && axiosError.response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
-				console.debug(`Endpoint not found: ${endpoint}, trying next endpoint`)
+				log.debug(`Endpoint not found: ${endpoint}, trying next endpoint`)
 				continue
 			} else {
 				// Rethrow the error if it's not a 404 or if it's the last endpoint.

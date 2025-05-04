@@ -93,7 +93,7 @@ export class UniFiAP {
    */
 	async getOn(): Promise<CharacteristicValue> {
 		try {
-			const accessPoint = await getAccessPoint(this.accessory.context.accessPoint._id, this.platform.sessionManager.request.bind(this.platform.sessionManager))
+			const accessPoint = await getAccessPoint(this.accessory.context.accessPoint._id, this.platform.sessionManager.request.bind(this.platform.sessionManager), this.platform.log)
 			if (accessPoint) {
 				if (accessPoint.type === 'udm') {
 					if (accessPoint.ledSettings) {
