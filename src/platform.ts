@@ -7,11 +7,12 @@ import { getAccessPoints } from './unifi'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings'
 
 interface UnifiAPLightConfig extends PlatformConfig {
-    host: string // Hostname and port, e.g., "localhost:8443"
-    username: string // Username for authentication
-    password: string // Password for authentication
-    includeIds?: string[] // Optional array of IDs to specifically include
-    excludeIds?: string[] // Optional array of IDs to specifically exclude
+	host: string 			// Hostname and port, e.g., "localhost:8443"
+	username: string 		// Username for authentication
+	password: string 		// Password for authentication
+	sites?: string[] 		// Optional array of site names to include; defaults to ["default"] if unspecified
+	includeIds?: string[] 	// Optional array of device IDs to include
+	excludeIds?: string[] 	// Optional array of device IDs to exclude
 }
 
 /**
@@ -26,9 +27,9 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	public readonly accessories: PlatformAccessory[] = []
 
 	constructor(
-        public readonly log: Logger,
-        public readonly config: PlatformConfig,
-        public readonly api: API,
+		public readonly log: Logger,
+		public readonly config: PlatformConfig,
+		public readonly api: API,
 	) {
 		// Assert and assign the config to this.config directly as UnifiAPLightConfig
 		this.config = config as UnifiAPLightConfig
@@ -43,29 +44,48 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	}
 
 	/**
-	 * Restore cached accessories from disk at startup.
-	 * This is primarily used for setting up event handlers for accessory characteristics and updating their values as needed.
-	 */
+   * Restore cached accessories from disk at startup.
+   */
 	configureAccessory(accessory: PlatformAccessory) {
 		this.log.info('Loading accessory from cache:', accessory.displayName)
-
-		// Add the restored accessory to the accessories cache to track if it was previously registered
 		this.accessories.push(accessory)
 	}
 
 	/**
- * Discovers and registers new devices as HomeKit accessories based on the UniFi controller data.
- */
+   * Discovers and registers new devices as HomeKit accessories based on the UniFi controller data.
+   */
 	async discoverDevices() {
-		// Authenticate with the UniFi controller before attempting to discover devices.
 		await this.sessionManager.authenticate()
 
 		try {
-			// Fetch the list of UniFi access points from the controller.
-			const accessPoints = await getAccessPoints(this.sessionManager.request.bind(this.sessionManager), this.log)
+			// Determine target sites: use provided list or fallback to ['default']
+			const siteInput = this.config.sites?.length ? this.config.sites : ['default']
+
+			// Resolve friendly site names (desc) to internal UniFi site names
+			const resolvedSites: string[] = []
+			for (const site of siteInput) {
+				const internal = this.sessionManager.getSiteName(site)
+				if (internal) {
+					resolvedSites.push(internal)
+				} else {
+					this.log.warn(`Site "${site}" is not recognized by the UniFi controller.`)
+				}
+			}
+
+			if (!resolvedSites.length) {
+				this.log.error('No valid sites resolved. Aborting discovery.')
+				return
+			}
+
+			// Attempt to get devices from specified sites
+			const accessPoints = await getAccessPoints(this.sessionManager.request.bind(this.sessionManager), resolvedSites, this.log)
+
+			if (!accessPoints.length) {
+				this.log.warn('No access points discovered. Check your site configuration and permissions.')
+			}
 
 			// Process each access point to determine if it should be included or excluded.
-			accessPoints.forEach(accessPoint => {
+			for (const accessPoint of accessPoints) {
 				// Generate a unique identifier for the HomeKit accessory based on the access point ID.
 				const uuid = this.api.hap.uuid.generate(accessPoint._id)
 
@@ -95,7 +115,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 					new UniFiAP(this, newAccessory)
 					this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [newAccessory])
 				}
-			})
+			}
 		} catch (error) {
 			const axiosError = error as AxiosError
 			// Log detailed errors if the device discovery fails.

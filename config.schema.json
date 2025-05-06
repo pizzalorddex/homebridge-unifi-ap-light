@@ -29,13 +29,21 @@
         "required": true,
         "description": "The password for the UniFi Controller."
       },
+      "sites": {
+        "title": "Sites",
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Optional list of UniFi site names to control (e.g., ['default', 'MyHome']). Leave empty to use the default site."
+      },
       "includeIds": {
         "title": "Include Device IDs",
         "type": "array",
         "items": {
           "type": "string"
         },
-        "description": "A list of device IDs to include."
+        "description": "Optional list of specific device IDs to include. Leave empty to include all devices (unless excluded below)."
       },
       "excludeIds": {
         "title": "Exclude Device IDs",
@@ -43,7 +51,7 @@
         "items": {
           "type": "string"
         },
-        "description": "A list of device IDs to exclude."
+        "description": "Optional list of device IDs to exclude. These will be skipped even if included above."
       }
     }
   }

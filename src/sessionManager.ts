@@ -13,6 +13,7 @@ export class SessionManager {
 	private username: string
 	private password: string
 	private log: Logger
+	private siteMap: Map<string, string> = new Map()
 
 	constructor(host: string, username: string, password: string, log: Logger) {
 		this.host = host
@@ -28,8 +29,8 @@ export class SessionManager {
 	}
 
 	/**
-	 * Attempts to authenticate using the primary method, with a fallback to the secondary method upon failure.
-	 */
+   * Attempts to authenticate using the primary method, with a fallback to the secondary method upon failure.
+   */
 	async authenticate() {
 		try {
 			await this.primaryAuthMethod()
@@ -39,8 +40,12 @@ export class SessionManager {
 				await this.secondaryAuthMethod()
 			} catch (fallbackError) {
 				this.log.error(`Both authentication methods failed: ${fallbackError}`)
+				throw fallbackError
 			}
 		}
+
+		// Fetch site list after successful authentication
+		await this.loadSites()
 	}
 
 	private async primaryAuthMethod() {
@@ -64,13 +69,13 @@ export class SessionManager {
 			rememberMe: true,
 		})
 
-		if(!headers['set-cookie']) {
+		if (!headers['set-cookie']) {
 			throw new Error('Secondary authentication method failed: No cookies found.')
 		}
 
 		const cookies = cookie.parse(headers['set-cookie'].join('; '))
 		const token = cookies['TOKEN']
-		const decoded = jwt.decode(token)
+		const decoded = jwt.decode(token) as any
 		const csrfToken = decoded ? decoded.csrfToken : null
 
 		if (!csrfToken) {
@@ -79,14 +84,15 @@ export class SessionManager {
 
 		// Assuming CSRF token needs to be sent as a header for subsequent requests
 		this.axiosInstance.defaults.headers['X-Csrf-Token'] = csrfToken
-		this.axiosInstance.defaults.headers['Cookie'] += `; TOKEN=${token}` // Append TOKEN cookie
-        
+		// Append TOKEN cookie
+		this.axiosInstance.defaults.headers['Cookie'] += `; TOKEN=${token}`
+
 		this.log.debug('Authentication with secondary method successful.')
 	}
 
 	/**
-	 * Handles API requests, automatically re-authenticating if necessary.
-	 */
+   * Handles API requests, automatically re-authenticating if necessary.
+   */
 	async request(config) {
 		try {
 			return await this.axiosInstance(config)
@@ -95,10 +101,69 @@ export class SessionManager {
 			if (axiosError.response && axiosError.response.status === 401) {
 				this.log.debug('Session expired, attempting to re-authenticate...')
 				await this.authenticate()
-				return await this.axiosInstance(config) // Retry the request after re-authentication
+				// Retry the request after re-authentication
+				return await this.axiosInstance(config)
 			} else {
 				throw axiosError
 			}
 		}
+	}
+
+	/**
+   * Loads and stores the list of available sites by friendly name and internal name.
+   */
+	private async loadSites() {
+		try {
+			const response = await this.request({ url: '/api/self/sites', method: 'get' })
+			const sites = response?.data?.data
+			if (Array.isArray(sites)) {
+				for (const site of sites) {
+					if (site.desc) {
+						this.siteMap.set(site.desc, site.name)
+					}
+					if (site.name) {
+						this.siteMap.set(site.name, site.name)
+					}
+				}
+				this.log.debug(`All available UniFi sites: ${Array.from(this.siteMap.keys()).join(', ')}`)
+			} else {
+				throw new Error('Unexpected site data format')
+			}
+		} catch (error) {
+			this.log.error(`Failed to load site list: ${error}`)
+			throw error
+		}
+	}
+
+	/**
+   * Resolves a user-friendly site name (from config) to the internal API site name.
+   * @param friendlyName The user-specified site name
+   */
+	getSiteName(friendlyName: string): string | undefined {
+		const internalName = this.siteMap.get(friendlyName)
+		if (!internalName) {
+			this.log.warn(
+				`Configured site "${friendlyName}" not recognized. Available: ${this.getAvailableSitePairs().join(', ')}`
+			)
+		}
+		return internalName
+	}
+
+	/**
+ * Returns all available sites as user-visible "desc (name)" pairs.
+ */
+	getAvailableSitePairs(): string[] {
+		const seen = new Set<string>()
+		const pairs: string[] = []
+  
+		// Reverse-lookup: build from desc → name entries
+		for (const [key, value] of this.siteMap.entries()) {
+			if (key !== value && !seen.has(value)) {
+				pairs.push(`${key} (${value})`)
+				seen.add(value)
+			}
+		}
+  
+		return pairs
 	}
 }

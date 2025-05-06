@@ -2,25 +2,32 @@
 Control the light rings on your UniFi Access Point(s) with HomeKit!
 
 ## Features
-- **Dynamic Discovery:** Automatically discovers all UniFi APs on your network.
-- **Real-time Updates:** Changes made through HomeKit are reflected immediately on your devices.
-- **Advanced Configuration:** Supports detailed configuration for filtering APs to display in the Home app.
-- **Backwards Compatible:** Supports both older and newer UniFi APIs for better compatibility.
-- **API Session Manager:** Ensures the connection to the API doesn't break down due to cookie/token changes.
+- **Multi-Site Support:** Supports multiple UniFi sites (tenants) in a single Homebridge config.
+- **Dynamic Discovery:** Automatically discovers UniFi APs across one or more specified sites.
+- **Real-time Updates:** Changes made in HomeKit instantly reflect on your access points.
+- **Advanced Filtering:** Include or exclude specific APs by ID.
+- **Compatiblity:** Supports self-hosted and Ubiquiti-hosted (e.g. UDM) UniFi API structures.
+- **Session Management:** Robust handling of cookie- and token-based API authentication.
 
 ## Installation
-Search for `homebridge-unifi-ap-light`, or run either:
+Search for `homebridge-unifi-ap-light` in the Homebridge UI, or run:
+
 ```sh
 npm install -g homebridge-unifi-ap-light
 ```
-Or
+
+Or, with Yarn:
+
 ```sh
 yarn global add homebridge-unifi-ap-light
 ```
 
 ## Usage
-Create a local UniFi OS user, take note of the username and password.
-Add the following to your `config.json`:
+
+1. Create a dedicated UniFi OS local user (not your UI account).
+2. Note the username and password.
+3. Add the following to your Homebridge `config.json`:
+
 ```json
 {
   "name": "UniFi AP Lights",
@@ -31,25 +38,45 @@ Add the following to your `config.json`:
 }
 ```
 
-- If your UniFi Controller is self-hosted (running on other hardware, like a Raspberry Pi), include the port number in the host field (e.g., `"host": "192.168.1.1:8443"`).
-- If your UniFi Controller is running on a UniFi device (like a UDM or UDR), the port number is not necessary (e.g., `"host": "192.168.1.1"`).
+- For self-hosted controllers, include the port (e.g., `"192.168.1.1:8443"`).
+- For UniFi devices like UDM or UDR, omit the port (e.g., `"192.168.1.1"`).
 
 ## Optional Configuration
-You can control which access points are exposed to HomeKit using include / exclude IDs options:
+
+### Specify UniFi Site(s)
+
 ```json
 {
-  "name": "UniFi AP Lights",
-  "platform": "UnifiAPLight",
-  "host": "<hostname>:<port>",
-  "username": "<username>",
-  "password": "<password>",
-  "includeIds": ["<id1>", "<id2>"],
-  "excludeIds": ["<id3>"]
+  "sites": ["Default", "mySite"]
 }
 ```
 
-- `includeIds`: Only the devices with IDs listed will be included. If not specified, all devices are included by default.
-- `excludeIds`: Any device with an ID in this list will be excluded from HomeKit, regardless of other settings.
+- You may specify site `desc` values (friendly names like `"Default"`, `"mySite"`) or internal names (`"default"`, `"p2yvd0iv"`).
+- The plugin automatically resolves the proper internal identifiers using the UniFi API.
+
+### Include / Exclude Specific Devices
+
+```json
+{
+  "includeIds": ["<device-id-1>", "<device-id-2>"],
+  "excludeIds": ["<device-id-3>"]
+}
+```
+
+- `includeIds`: Only devices with these IDs will be shown in HomeKit.
+- `excludeIds`: Devices with these IDs will always be excluded, even if included elsewhere.
+
+## Debugging Tips
+
+- Run Homebridge in debug mode (`homebridge -D`) to view detailed logs.
+- On startup, the plugin will list all detected sites:
+  ```
+  [UniFi AP Lights] Available sites loaded: Default, default, mySite, p2yvd0iv
+  ```
+- If a site is not recognized, you'll see:
+  ```
+  Site "xyz" is not recognized by the controller (api.err.NoSiteContext).
+  ```
 
 ## License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License — see the LICENSE file for details.
