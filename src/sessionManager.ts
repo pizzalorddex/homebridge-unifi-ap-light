@@ -114,7 +114,7 @@ export class SessionManager {
    */
 	private async loadSites() {
 		try {
-			const response = await this.request({ url: '/api/self/sites', method: 'get' })
+			const response = await this.request({ url: '/proxy/network/api/self/sites', method: 'get' })
 			const sites = response?.data?.data
 			if (Array.isArray(sites)) {
 				for (const site of sites) {
