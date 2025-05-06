@@ -62,7 +62,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 
 		try {
 			// Fetch the list of UniFi access points from the controller.
-			const accessPoints = await getAccessPoints(this.sessionManager.request.bind(this.sessionManager))
+			const accessPoints = await getAccessPoints(this.sessionManager.request.bind(this.sessionManager), this.log)
 
 			// Process each access point to determine if it should be included or excluded.
 			accessPoints.forEach(accessPoint => {
