@@ -66,30 +66,32 @@ export class SessionManager {
 	}
 
 	private async secondaryAuthMethod() {
-		const { headers } = await this.axiosInstance.post('/api/auth/login', {
+		const response = await this.axiosInstance.post('/api/auth/login', {
 			username: this.username,
 			password: this.password,
 			rememberMe: true,
 		})
-
+	
+		const headers = response.headers
+	
 		if (!headers['set-cookie']) {
 			throw new Error('Secondary authentication method failed: No cookies found.')
 		}
-
+	
 		const cookies = cookie.parse(headers['set-cookie'].join('; '))
 		const token = cookies['TOKEN']
 		const decoded = jwt.decode(token) as any
 		const csrfToken = decoded ? decoded.csrfToken : null
-
+	
 		if (!csrfToken) {
 			throw new Error('Secondary authentication method failed: CSRF token not found.')
 		}
-
+	
 		// Assuming CSRF token needs to be sent as a header for subsequent requests
 		this.axiosInstance.defaults.headers['X-Csrf-Token'] = csrfToken
 		// Append TOKEN cookie
 		this.axiosInstance.defaults.headers['Cookie'] += `; TOKEN=${token}`
-
+		
 		this.isUniFiOS = true // UniFi OS
 		this.log.debug('Authentication with secondary method (UniFi OS) successful.')
 	}
