@@ -33,6 +33,10 @@ export class SessionManager {
    * Attempts to authenticate using the primary method, with a fallback to the secondary method upon failure.
    */
 	async authenticate() {
+		// Remove possibly stale headers from previous sessions
+		delete this.axiosInstance.defaults.headers.common['Cookie']
+		delete this.axiosInstance.defaults.headers.common['X-Csrf-Token']
+
 		try {
 			this.log.debug('Attempting primary (self-hosted) authentication...')
 			await this.primaryAuthMethod()
@@ -57,7 +61,7 @@ export class SessionManager {
 		})
 
 		if (response.headers['set-cookie']) {
-			this.axiosInstance.defaults.headers['Cookie'] = response.headers['set-cookie'].join('; ')
+			this.axiosInstance.defaults.headers.common['Cookie'] = response.headers['set-cookie'].join('; ')
 			this.isUniFiOS = false // self-hosted
 			this.log.debug('Authentication with primary method (self-hosted) successful.')
 		} else {
@@ -66,30 +70,49 @@ export class SessionManager {
 	}
 
 	private async secondaryAuthMethod() {
-		const { headers } = await this.axiosInstance.post('/api/auth/login', {
-			username: this.username,
-			password: this.password,
-			rememberMe: true,
-		})
+		let response
 
-		if(!headers['set-cookie']) {
+		try {
+			response = await this.axiosInstance.post('/api/auth/login', {
+				username: this.username,
+				password: this.password,
+				rememberMe: true,
+			})
+		} catch (error) {
+			this.log.error('Secondary auth request failed:', error)
+			throw new Error('Secondary authentication method failed: Request error.')
+		}
+
+		// Ensure headers and cookies are present
+		const headers = response?.headers
+		if (!headers || !Array.isArray(headers['set-cookie']) || !headers['set-cookie'].length) {
+			this.log.error('Secondary authentication failed: No set-cookie header received.')
 			throw new Error('Secondary authentication method failed: No cookies found.')
 		}
 
-		const cookies = cookie.parse(headers['set-cookie'].join('; '))
-		const token = cookies['TOKEN']
-		const decoded = jwt.decode(token)
-		const csrfToken = decoded ? decoded.csrfToken : null
+		// Parse cookie and extract token values
+		let token: string | undefined
+		let csrfToken: string | undefined
 
-		if (!csrfToken) {
-			throw new Error('Secondary authentication method failed: CSRF token not found.')
+		try {
+			const parsedCookies = cookie.parse(headers['set-cookie'].join('; '))
+			token = parsedCookies['TOKEN']
+			const decoded = jwt.decode(token) as any
+			csrfToken = decoded?.csrfToken
+		} catch (err) {
+			this.log.error('Cookie parsing or token decoding failed:', err)
+			throw new Error('Secondary authentication method failed: Malformed cookie or token.')
 		}
 
-		// Assuming CSRF token needs to be sent as a header for subsequent requests
-		this.axiosInstance.defaults.headers['X-Csrf-Token'] = csrfToken
-		this.axiosInstance.defaults.headers['Cookie'] += `; TOKEN=${token}` // Append TOKEN cookie
-		
-		this.isUniFiOS = true // UniFi OS
+		if (!csrfToken || !token) {
+			throw new Error('Secondary authentication method failed: Missing CSRF token or TOKEN cookie.')
+		}
+
+		// Safely apply authentication headers for UniFi OS
+		this.axiosInstance.defaults.headers.common['X-Csrf-Token'] = csrfToken
+		this.axiosInstance.defaults.headers.common['Cookie'] = `${headers['set-cookie'].join('; ')}; TOKEN=${token}`
+
+		this.isUniFiOS = true
 		this.log.debug('Authentication with secondary method (UniFi OS) successful.')
 	}
 
@@ -155,12 +178,12 @@ export class SessionManager {
 	}
 
 	/**
- * Returns all available sites as user-visible "desc (name)" pairs.
- */
+   * Returns all available sites as user-visible "desc (name)" pairs.
+   */
 	getAvailableSitePairs(): string[] {
 		const seen = new Set<string>()
 		const pairs: string[] = []
-  
+
 		// Reverse-lookup: build from desc → name entries
 		for (const [key, value] of this.siteMap.entries()) {
 			if (key !== value && !seen.has(value)) {
@@ -168,7 +191,7 @@ export class SessionManager {
 				seen.add(value)
 			}
 		}
-  
+
 		return pairs
 	}
 }
