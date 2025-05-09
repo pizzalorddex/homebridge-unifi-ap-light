@@ -14,6 +14,7 @@ export class SessionManager {
 	private password: string
 	private log: Logger
 	private siteMap: Map<string, string> = new Map()
+	private isUniFiOS = false
 
 	constructor(host: string, username: string, password: string, log: Logger) {
 		this.host = host
@@ -33,9 +34,10 @@ export class SessionManager {
    */
 	async authenticate() {
 		try {
+			this.log.debug('Attempting primary (self-hosted) authentication...')
 			await this.primaryAuthMethod()
 		} catch (error) {
-			this.log.debug('Primary authentication method failed, attempting secondary.')
+			this.log.debug('Primary authentication method failed, attempting secondary (UniFi OS)...')
 			try {
 				await this.secondaryAuthMethod()
 			} catch (fallbackError) {
@@ -56,7 +58,8 @@ export class SessionManager {
 
 		if (response.headers['set-cookie']) {
 			this.axiosInstance.defaults.headers['Cookie'] = response.headers['set-cookie'].join('; ')
-			this.log.debug('Authentication with primary method successful.')
+			this.isUniFiOS = false // self-hosted
+			this.log.debug('Authentication with primary method (self-hosted) successful.')
 		} else {
 			throw new Error('Primary authentication method failed: No cookies found.')
 		}
@@ -87,7 +90,8 @@ export class SessionManager {
 		// Append TOKEN cookie
 		this.axiosInstance.defaults.headers['Cookie'] += `; TOKEN=${token}`
 
-		this.log.debug('Authentication with secondary method successful.')
+		this.isUniFiOS = true // UniFi OS
+		this.log.debug('Authentication with secondary method (UniFi OS) successful.')
 	}
 
 	/**
@@ -113,8 +117,10 @@ export class SessionManager {
    * Loads and stores the list of available sites by friendly name and internal name.
    */
 	private async loadSites() {
+		const url = this.isUniFiOS ? '/proxy/network/api/self/sites' : '/api/self/sites'
+
 		try {
-			const response = await this.request({ url: '/api/self/sites', method: 'get' })
+			const response = await this.request({ url, method: 'get' })
 			const sites = response?.data?.data
 			if (Array.isArray(sites)) {
 				for (const site of sites) {
@@ -125,12 +131,12 @@ export class SessionManager {
 						this.siteMap.set(site.name, site.name)
 					}
 				}
-				this.log.debug(`All available UniFi sites: ${Array.from(this.siteMap.keys()).join(', ')}`)
+				this.log.debug(`Loaded sites from ${url}: ${Array.from(this.siteMap.keys()).join(', ')}`)
 			} else {
 				throw new Error('Unexpected site data format')
 			}
 		} catch (error) {
-			this.log.error(`Failed to load site list: ${error}`)
+			this.log.error(`Failed to load site list from ${url}: ${error}`)
 			throw error
 		}
 	}
