@@ -1,8 +1,8 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
 import { AxiosError, AxiosResponse } from 'axios'
 
-import { UnifiAPLight } from './platform'
-import { getAccessPoint } from './unifi'
+import { UnifiAPLight } from './platform.js'
+import { getAccessPoint } from './unifi.js'
 
 /**
  * This class represents a single platform accessory (e.g., a UniFi access point) for Homebridge.

@@ -1,10 +1,10 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge'
 import { AxiosError } from 'axios'
 
-import { SessionManager } from './sessionManager'
-import { UniFiAP } from './platformAccessory'
-import { getAccessPoints } from './unifi'
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings'
+import { SessionManager } from './sessionManager.js'
+import { UniFiAP } from './platformAccessory.js'
+import { getAccessPoints } from './unifi.js'
+import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
 
 interface UnifiAPLightConfig extends PlatformConfig {
 	host: string 			// Hostname and port, e.g., "localhost:8443"
