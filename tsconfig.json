@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2018", // ~node10
-    "module": "commonjs",
+    "target": "ES2018",
+    "module": "ES2020",
+    "moduleResolution": "node",
     "lib": [
       "es2015",
       "es2016",
@@ -16,6 +17,7 @@
     "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "noImplicitAny": false
   },
   "include": [

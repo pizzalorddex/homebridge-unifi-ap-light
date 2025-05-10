@@ -2,7 +2,7 @@ import { Logger } from 'homebridge'
 import Axios, { AxiosInstance, AxiosError } from 'axios'
 import jwt from 'jsonwebtoken'
 import https from 'https'
-import cookie from 'cookie'
+import { parse as parseCookie } from 'cookie'
 
 /**
  * Manages authentication sessions and re-authentication.
@@ -68,7 +68,7 @@ export class SessionManager {
 			throw new Error('Primary auth failed: No cookies returned')
 		}
 
-		instance.defaults.headers.Cookie = response.headers['set-cookie'].join('; ')
+		instance.defaults.headers.common['Cookie'] = response.headers['set-cookie'].join('; ')
 		return { instance, isUniFiOS: false }
 	}
 
@@ -99,7 +99,7 @@ export class SessionManager {
 		let csrfToken = ''
 
 		try {
-			const parsed = cookie.parse(setCookie.join('; '))
+			const parsed = parseCookie(setCookie.join('; '))
 			token = parsed['TOKEN'] ?? ''
 			const decoded = jwt.decode(token) as any
 			csrfToken = decoded?.csrfToken
@@ -112,8 +112,8 @@ export class SessionManager {
 			throw new Error('Secondary auth failed: CSRF token not found.')
 		}
 
-		instance.defaults.headers['X-Csrf-Token'] = csrfToken
-		instance.defaults.headers['Cookie'] = `${setCookie.join('; ')}; TOKEN=${token}`
+		instance.defaults.headers.common['X-Csrf-Token'] = csrfToken
+		instance.defaults.headers.common['Cookie'] = `${setCookie.join('; ')}; TOKEN=${token}`
 		return { instance, isUniFiOS: true }
 	}
 

@@ -1031,7 +1031,7 @@ hexy@^0.3.5:
   resolved "https://registry.npmjs.org/hexy/-/hexy-0.3.5.tgz"
   integrity sha512-UCP7TIZPXz5kxYJnNOym+9xaenxCLor/JyhKieo8y8/bJWunGh9xbhy3YrgYJUQ87WwfXGm05X330DszOfINZw==
 
-homebridge@^1.3.5:
+homebridge@^1.5.0:
   version "1.9.0"
   resolved "https://registry.npmjs.org/homebridge/-/homebridge-1.9.0.tgz"
   integrity sha512-h8E/6VODsl8M0pDwf/Lu58iI6WzfAMbcOneISGpKS16jf2Sl7yP4c6pfFNPYY/fxwkWuHUlb5mUaZy4xEvb7LQ==
