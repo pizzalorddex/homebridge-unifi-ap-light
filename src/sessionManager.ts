@@ -8,7 +8,7 @@ import cookie from 'cookie'
  * Manages authentication sessions and re-authentication.
  */
 export class SessionManager {
-	private axiosInstance: AxiosInstance
+	private axiosInstance: AxiosInstance | null = null
 	private host: string
 	private username: string
 	private password: string
@@ -21,113 +21,116 @@ export class SessionManager {
 		this.username = username
 		this.password = password
 		this.log = log
-
-		// Initialize Axios instance with baseURL
-		this.axiosInstance = Axios.create({
-			baseURL: `https://${host}`,
-			httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-		})
 	}
 
 	/**
-   * Attempts to authenticate using the primary method, with a fallback to the secondary method upon failure.
-   */
+	 * Authenticates using both methods in parallel, and adopts the first one that succeeds.
+	 */
 	async authenticate() {
-		// Remove possibly stale headers from previous sessions
-		delete this.axiosInstance.defaults.headers.common['Cookie']
-		delete this.axiosInstance.defaults.headers.common['X-Csrf-Token']
+		this.log.debug('Starting parallel authentication attempts...')
+
+		const primaryAttempt = this.tryPrimaryAuth()
+		const secondaryAttempt = this.trySecondaryAuth()
 
 		try {
-			this.log.debug('Attempting primary (self-hosted) authentication...')
-			await this.primaryAuthMethod()
-		} catch (error) {
-			this.log.debug('Primary authentication method failed, attempting secondary (UniFi OS)...')
-			try {
-				await this.secondaryAuthMethod()
-			} catch (fallbackError) {
-				this.log.error(`Both authentication methods failed: ${fallbackError}`)
-				throw fallbackError
-			}
-		}
+			const { instance, isUniFiOS } = await Promise.any([primaryAttempt, secondaryAttempt])
 
-		// Fetch site list after successful authentication
-		await this.loadSites()
+			// Assign the working Axios instance and detected mode
+			this.axiosInstance = instance
+			this.isUniFiOS = isUniFiOS
+			this.log.debug(`Authentication successful. UniFi OS mode: ${isUniFiOS}`)
+
+			await this.loadSites()
+		} catch (error) {
+			this.log.error(`Both authentication methods failed: ${error}`)
+			throw error
+		}
 	}
 
-	private async primaryAuthMethod() {
-		const response = await this.axiosInstance.post('/api/login', {
+	/**
+	 * Auth using /api/login for self-hosted consoles.
+	 * Returns a fully-configured Axios instance.
+	 */
+	private async tryPrimaryAuth(): Promise<{ instance: AxiosInstance; isUniFiOS: boolean }> {
+		const instance = Axios.create({
+			baseURL: `https://${this.host}`,
+			httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+		})
+
+		this.log.debug('Trying primary (self-hosted) authentication...')
+
+		const response = await instance.post('/api/login', {
 			username: this.username,
 			password: this.password,
 		})
 
-		if (response.headers['set-cookie']) {
-			this.axiosInstance.defaults.headers.common['Cookie'] = response.headers['set-cookie'].join('; ')
-			this.isUniFiOS = false // self-hosted
-			this.log.debug('Authentication with primary method (self-hosted) successful.')
-		} else {
-			throw new Error('Primary authentication method failed: No cookies found.')
-		}
-	}
-
-	private async secondaryAuthMethod() {
-		let response
-
-		try {
-			response = await this.axiosInstance.post('/api/auth/login', {
-				username: this.username,
-				password: this.password,
-				rememberMe: true,
-			})
-		} catch (error) {
-			this.log.error('Secondary auth request failed:', error)
-			throw new Error('Secondary authentication method failed: Request error.')
+		if (!response.headers['set-cookie']) {
+			throw new Error('Primary auth failed: No cookies returned')
 		}
 
-		// Ensure headers and cookies are present
-		const headers = response?.headers
-		if (!headers || !Array.isArray(headers['set-cookie']) || !headers['set-cookie'].length) {
-			this.log.error('Secondary authentication failed: No set-cookie header received.')
-			throw new Error('Secondary authentication method failed: No cookies found.')
-		}
-
-		// Parse cookie and extract token values
-		let token: string | undefined
-		let csrfToken: string | undefined
-
-		try {
-			const parsedCookies = cookie.parse(headers['set-cookie'].join('; '))
-			token = parsedCookies['TOKEN']
-			const decoded = jwt.decode(token) as any
-			csrfToken = decoded?.csrfToken
-		} catch (err) {
-			this.log.error('Cookie parsing or token decoding failed:', err)
-			throw new Error('Secondary authentication method failed: Malformed cookie or token.')
-		}
-
-		if (!csrfToken || !token) {
-			throw new Error('Secondary authentication method failed: Missing CSRF token or TOKEN cookie.')
-		}
-
-		// Safely apply authentication headers for UniFi OS
-		this.axiosInstance.defaults.headers.common['X-Csrf-Token'] = csrfToken
-		this.axiosInstance.defaults.headers.common['Cookie'] = `${headers['set-cookie'].join('; ')}; TOKEN=${token}`
-
-		this.isUniFiOS = true
-		this.log.debug('Authentication with secondary method (UniFi OS) successful.')
+		instance.defaults.headers.Cookie = response.headers['set-cookie'].join('; ')
+		return { instance, isUniFiOS: false }
 	}
 
 	/**
-   * Handles API requests, automatically re-authenticating if necessary.
-   */
+	 * Auth using /api/auth/login for UniFi OS consoles.
+	 * Returns a fully-configured Axios instance.
+	 */
+	private async trySecondaryAuth(): Promise<{ instance: AxiosInstance; isUniFiOS: boolean }> {
+		const instance = Axios.create({
+			baseURL: `https://${this.host}`,
+			httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+		})
+
+		this.log.debug('Trying secondary (UniFi OS) authentication...')
+
+		const response = await instance.post('/api/auth/login', {
+			username: this.username,
+			password: this.password,
+			rememberMe: true,
+		})
+
+		const setCookie = response.headers['set-cookie']
+		if (!setCookie) {
+			throw new Error('Secondary auth failed: No cookies returned')
+		}
+
+		let token = ''
+		let csrfToken = ''
+
+		try {
+			const parsed = cookie.parse(setCookie.join('; '))
+			token = parsed['TOKEN'] ?? ''
+			const decoded = jwt.decode(token) as any
+			csrfToken = decoded?.csrfToken
+		} catch (err) {
+			this.log.error(`Cookie parsing or token decoding failed: ${err}`)
+			throw new Error('Secondary authentication failed: Malformed cookie or token.')
+		}
+
+		if (!csrfToken) {
+			throw new Error('Secondary auth failed: CSRF token not found.')
+		}
+
+		instance.defaults.headers['X-Csrf-Token'] = csrfToken
+		instance.defaults.headers['Cookie'] = `${setCookie.join('; ')}; TOKEN=${token}`
+		return { instance, isUniFiOS: true }
+	}
+
+	/**
+	 * Handles API requests with retry on 401
+	 */
 	async request(config) {
+		if (!this.axiosInstance) {
+			throw new Error('Cannot make API request: No authenticated session.')
+		}
 		try {
 			return await this.axiosInstance(config)
 		} catch (error) {
 			const axiosError = error as AxiosError
-			if (axiosError.response && axiosError.response.status === 401) {
-				this.log.debug('Session expired, attempting to re-authenticate...')
+			if (axiosError.response?.status === 401) {
+				this.log.warn('Session expired, retrying authentication...')
 				await this.authenticate()
-				// Retry the request after re-authentication
 				return await this.axiosInstance(config)
 			} else {
 				throw axiosError
@@ -136,26 +139,25 @@ export class SessionManager {
 	}
 
 	/**
-   * Loads and stores the list of available sites by friendly name and internal name.
-   */
+	 * Load available sites from the appropriate endpoint.
+	 */
 	private async loadSites() {
 		const url = this.isUniFiOS ? '/proxy/network/api/self/sites' : '/api/self/sites'
 
 		try {
 			const response = await this.request({ url, method: 'get' })
 			const sites = response?.data?.data
+
 			if (Array.isArray(sites)) {
 				for (const site of sites) {
-					if (site.desc) {
+					if (site.desc) 
 						this.siteMap.set(site.desc, site.name)
-					}
-					if (site.name) {
+					if (site.name) 
 						this.siteMap.set(site.name, site.name)
-					}
 				}
 				this.log.debug(`Loaded sites from ${url}: ${Array.from(this.siteMap.keys()).join(', ')}`)
 			} else {
-				throw new Error('Unexpected site data format')
+				throw new Error('Unexpected site list structure')
 			}
 		} catch (error) {
 			this.log.error(`Failed to load site list from ${url}: ${error}`)
@@ -163,35 +165,25 @@ export class SessionManager {
 		}
 	}
 
-	/**
-   * Resolves a user-friendly site name (from config) to the internal API site name.
-   * @param friendlyName The user-specified site name
-   */
 	getSiteName(friendlyName: string): string | undefined {
-		const internalName = this.siteMap.get(friendlyName)
-		if (!internalName) {
+		const internal = this.siteMap.get(friendlyName)
+		if (!internal) {
 			this.log.warn(
 				`Configured site "${friendlyName}" not recognized. Available: ${this.getAvailableSitePairs().join(', ')}`
 			)
 		}
-		return internalName
+		return internal
 	}
 
-	/**
-   * Returns all available sites as user-visible "desc (name)" pairs.
-   */
 	getAvailableSitePairs(): string[] {
 		const seen = new Set<string>()
 		const pairs: string[] = []
-
-		// Reverse-lookup: build from desc → name entries
 		for (const [key, value] of this.siteMap.entries()) {
 			if (key !== value && !seen.has(value)) {
 				pairs.push(`${key} (${value})`)
 				seen.add(value)
 			}
 		}
-
 		return pairs
 	}
 }
