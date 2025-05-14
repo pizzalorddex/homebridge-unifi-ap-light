@@ -1,7 +1,7 @@
 {
   "displayName": "UniFi Access Point Light",
   "name": "homebridge-unifi-ap-light",
-  "version": "1.4.5-beta.1",
+  "version": "1.5.0-beta.1",
   "description": "Control the blue LED ring on your UniFi APs!",
   "license": "Apache-2.0",
   "type": "module",
@@ -14,18 +14,20 @@
   },
   "homepage": "https://github.com/pizzalorddex/homebridge-unifi-ap-light#readme",
   "engines": {
-    "node": ">=18.15.0",
+    "node": ">=20.0.0 <23.0.0",
     "homebridge": ">=1.5.0"
   },
   "main": "dist/index.js",
   "scripts": {
     "lint": "eslint src/**.ts --max-warnings=0",
+    "test": "jest",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
     "homebridge-plugin",
+    "homebridge-dynamic-platform",
     "unifi",
     "led",
     "udm",
@@ -38,13 +40,17 @@
     "jsonwebtoken": "^9.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^18.0.0",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
     "eslint": "^8.0.1",
     "homebridge": "^1.5.0",
+    "jest": "^29.7.0",
     "nodemon": "^3.1.10",
     "rimraf": "^3.0.2",
+    "ts-jest": "^29.3.2",
     "ts-node": "^10.3.0",
     "typescript": "^5.0.0"
   }
