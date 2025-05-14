@@ -1,23 +1,29 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
 import { AxiosError, AxiosResponse } from 'axios'
+import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError } from './models/unifiTypes.js'
 
 import { UnifiAPLight } from './platform.js'
-import { getAccessPoint } from './unifi.js'
 
 /**
- * This class represents a single platform accessory (e.g., a UniFi access point) for Homebridge.
- * It handles the lifecycle and HomeKit interactions for individual accessories.
+ * UniFiAP Homebridge Accessory
+ * Represents a single UniFi AP as a HomeKit accessory, handling LED state and HomeKit interactions.
+ *
+ * @remarks
+ * - Uses device cache for efficient state lookups.
+ * - Surfaces errors to Homebridge and logs all failures.
  */
 export class UniFiAP {
 	// The underlying device object containing details like serial number and model
-	accessPoint: any
+	accessPoint: UnifiDevice
 	private service: Service
 
 	constructor(
 		private readonly platform: UnifiAPLight,
 		private readonly accessory: PlatformAccessory,
 	) {
-		this.accessPoint = this.accessory.context.accessPoint
+		// Always use the latest cached device info
+		const cached = this.platform.getDeviceCache().getDeviceById(this.accessory.context.accessPoint._id)
+		this.accessPoint = cached || this.accessory.context.accessPoint
 
 		// Fallback: Patch missing site property for cached accessories
 		if (!this.accessPoint.site) {
@@ -64,107 +70,87 @@ export class UniFiAP {
 
 	/**
 	 * Handles "SET" requests from HomeKit to change the state of the accessory.
-	 * @param {CharacteristicValue} value - The new state from HomeKit.
+	 *
+	 * @param {CharacteristicValue} value The new state from HomeKit.
+	 * @returns {Promise<void>}
 	 */
-	async setOn(value: CharacteristicValue) {
-		// Determine if this is a UDM-based device with nested LED settings
+	async setOn(value: CharacteristicValue): Promise<void> {
 		const isUdmDevice = this.accessPoint.type === 'udm'
 		const site = this.accessPoint.site ?? 'default'
-
-		// Choose the correct API payload based on device type
 		const data = isUdmDevice
 			? { ledSettings: { enabled: value } }
 			: { led_override: value ? 'on' : 'off' }
 
-		// Define API endpoints to try in sequence (some UniFi setups use different URL structures)
-		const endpoints = [
-			`/api/s/${site}/rest/device/${this.accessPoint._id}`,
-			`/proxy/network/api/s/${site}/rest/device/${this.accessPoint._id}`
-		]
-
-		// Try each endpoint until one works or all fail
-		for (const endpoint of endpoints) {
-			try {
-				const response: AxiosResponse = await this.platform.sessionManager.request({
-					method: 'put',
-					url: endpoint,
-					data: data,
-				})
-				if (response.status === 200) {
-					this.platform.log.debug(`Successfully set LED state for ${this.accessPoint.name} to ${value ? 'on' : 'off'}.`)
-					return
+		const endpoint = this.platform.sessionManager.getApiHelper().getDeviceUpdateEndpoint(site, this.accessPoint._id)
+		try {
+			const response: AxiosResponse = await this.platform.sessionManager.request({
+				method: 'put',
+				url: endpoint,
+				data: data,
+			})
+			if (response.status === 200) {
+				this.platform.log.debug(`Successfully set LED state for ${this.accessPoint.name} to ${value ? 'on' : 'off'}.`)
+				// Update cache
+				if (isUdmDevice && this.accessPoint.ledSettings) {
+					this.accessPoint.ledSettings.enabled = Boolean(value)
 				} else {
-					this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: Unexpected response status ${response.status}`)
+					this.accessPoint.led_override = value ? 'on' : 'off'
 				}
-			} catch (error) {
-				const axiosError = error as AxiosError
-				// Try next fallback endpoint if 404
-				if (axiosError.response && axiosError.response.status === 404 && endpoint !== endpoints[endpoints.length - 1]) {
-					continue
-				} else {
-					// Log full error details for debugging
-					this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: ${error}`)
-					if (axiosError.response) {
-						this.platform.log.error(`Response status: ${axiosError.response.status}`)
-						this.platform.log.error(`Response data: ${JSON.stringify(axiosError.response.data)}`)
-					}
-					break
-				}
+				this.platform.getDeviceCache().setDevices([
+					...this.platform.getDeviceCache().getAllDevices().filter(d => d._id !== this.accessPoint._id),
+					this.accessPoint
+				])
+				return
+			} else {
+				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: Unexpected response status ${response.status}`)
 			}
+		} catch (error) {
+			if (error instanceof UnifiAuthError || error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
+				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: ${error.message}`)
+			} else {
+				const axiosError = error as AxiosError
+				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: ${axiosError.message}`)
+			}
+			// Optionally, set accessory to Not Responding
+			this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
 		}
 	}
 
 	/**
 	 * Handles "GET" requests from HomeKit to retrieve the current state of the accessory.
-	 * @returns {Promise<CharacteristicValue>} - The current state of the accessory.
+	 *
+	 * @returns {Promise<CharacteristicValue>} The current state of the accessory.
 	 */
 	async getOn(): Promise<CharacteristicValue> {
 		try {
-			// Use the site name already attached to the AP context
-			const site = this.accessPoint.site
-			if (!site) {
-				this.platform.log.error(`Access point ${this.accessPoint.name} is missing site information.`)
+			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
+			if (!cached) {
+				this.platform.log.error(`Device ${this.accessPoint.name} not found in cache.`)
+				this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
 				return false
 			}
-
-			// Re-fetch the latest AP state using the current site
-			const accessPoint = await getAccessPoint(
-				this.accessPoint._id,
-				this.platform.sessionManager.request.bind(this.platform.sessionManager),
-				[site],
-				this.platform.log
-			)
-
-			// Process valid AP response
-			if (accessPoint) {
-				if (accessPoint.type === 'udm') {
-					// UDM devices use nested `ledSettings.enabled`
-					if (accessPoint.ledSettings) {
-						if (typeof accessPoint.ledSettings.enabled !== 'undefined') {
-							const isOn = accessPoint.ledSettings.enabled
-							this.platform.log.debug(`Retrieved LED state for ${this.accessPoint.name}: ${isOn ? 'on' : 'off'}`)
-							return isOn
-						} else {
-							this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${this.accessPoint.name}`)
-							return false
-						}
-					} else {
-						this.platform.log.error(`The 'ledSettings' property is undefined for ${this.accessPoint.name}`)
-						return false
-					}
-				} else {
-					// Standard APs use the flat `led_override` field
-					const isOn = accessPoint.led_override === 'on'
-					this.platform.log.debug(`Retrieved LED state for ${this.accessPoint.name}: ${isOn ? 'on' : 'off'}`)
+			if (cached.type === 'udm') {
+				if (cached.ledSettings && typeof cached.ledSettings.enabled !== 'undefined') {
+					const isOn = cached.ledSettings.enabled
+					this.platform.log.debug(`Retrieved LED state for ${cached.name}: ${isOn ? 'on' : 'off'}`)
 					return isOn
+				} else {
+					this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${cached.name}`)
+					this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
+					return false
 				}
 			} else {
-				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name}: Access point not found`)
-				return false
+				const isOn = cached.led_override === 'on'
+				this.platform.log.debug(`Retrieved LED state for ${cached.name}: ${isOn ? 'on' : 'off'}`)
+				return isOn
 			}
 		} catch (error) {
-			// Handle network or API errors gracefully
-			this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name}: ${error}`)
+			if (error instanceof UnifiAuthError || error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
+				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name}: ${error.message}`)
+			} else {
+				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name}: ${error}`)
+			}
+			this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
 			return false
 		}
 	}
