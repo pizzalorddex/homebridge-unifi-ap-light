@@ -24,11 +24,23 @@ describe('UnifiApiHelper', () => {
     expect(apiHelper.getSitesEndpoint()).toBe('/api/self/sites');
   });
 
-  // Add more tests for UniFi OS endpoints if/when you have real samples
+  it('should resolve device list endpoint for UniFi OS', () => {
+    apiHelper.setApiType(UnifiApiType.UnifiOS);
+    expect(apiHelper.getDeviceListEndpoint('default')).toBe('/proxy/network/api/s/default/stat/device');
+  });
 
-  it('should detect API type from site-list-success.json', async () => {
+  it('should resolve device update endpoint for UniFi OS', () => {
+    apiHelper.setApiType(UnifiApiType.UnifiOS);
+    expect(apiHelper.getDeviceUpdateEndpoint('default', 'deviceid')).toBe('/proxy/network/api/s/default/rest/device/deviceid');
+  });
+
+  it('should resolve sites endpoint for UniFi OS', () => {
+    apiHelper.setApiType(UnifiApiType.UnifiOS);
+    expect(apiHelper.getSitesEndpoint()).toBe('/proxy/network/api/self/sites');
+  });
+
+  it('should detect API type from site-list-success.json (integration)', async () => {
     // Simulate detection logic using fixture
-    // (You may need to mock Axios for full coverage)
     // This is a placeholder for future integration
     expect(apiHelper).toBeDefined();
   });

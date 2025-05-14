@@ -25,4 +25,24 @@ describe('DeviceCache', () => {
   it('should return undefined for missing device', () => {
     expect(cache.getDeviceById('missing')).toBeUndefined();
   });
+
+  it('should update cache with new device list', () => {
+    const deviceC: UnifiDevice = { _id: 'c', name: 'AP C', type: 'uap', site: 'default' } as any;
+    cache.setDevices([deviceA, deviceB]);
+    cache.setDevices([deviceA, deviceC]);
+    expect(cache.getDeviceById('b')).toBeUndefined();
+    expect(cache.getDeviceById('c')).toEqual(deviceC);
+  });
+
+  it('should handle duplicate IDs by overwriting', () => {
+    const dupA: UnifiDevice = { _id: 'a', name: 'AP A2', type: 'uap', site: 'default' } as any;
+    cache.setDevices([deviceA]);
+    cache.setDevices([dupA]);
+    expect(cache.getDeviceById('a')).toEqual(dupA);
+  });
+
+  it('should handle empty device list', () => {
+    cache.setDevices([]);
+    expect(cache.getAllDevices()).toHaveLength(0);
+  });
 });

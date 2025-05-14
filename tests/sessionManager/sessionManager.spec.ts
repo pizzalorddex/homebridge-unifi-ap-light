@@ -16,5 +16,31 @@ describe('SessionManager', () => {
     expect(session.getApiHelper()).toBeDefined();
   });
 
+  it('should throw on failed authentication', async () => {
+    const badSession = new SessionManager('host', 'baduser', 'badpass', log);
+    // Mock Axios to reject
+    vi.spyOn(badSession as any, 'axiosInstance', 'get').mockReturnValue({
+      post: vi.fn().mockRejectedValue(new Error('Auth failed')),
+      defaults: { headers: { common: {} } },
+    });
+    await expect(badSession.authenticate()).rejects.toThrow();
+  });
+
+  it('should handle site loading with malformed data', async () => {
+    const session = new SessionManager('host', 'user', 'pass', log);
+    vi.spyOn(session, 'request').mockResolvedValue({ data: { data: null } });
+    await expect(session['loadSites']()).rejects.toThrow();
+  });
+
+  it('should warn on unknown site', () => {
+    expect(session.getSiteName('unknown')).toBeUndefined();
+  });
+
+  it('should return available site pairs', () => {
+    (session as any).siteMap.set('desc', 'site1');
+    (session as any).siteMap.set('site1', 'site1');
+    expect(session.getAvailableSitePairs()).toContain('desc (site1)');
+  });
+
   // More tests will be added with Axios and API mocks
 });
