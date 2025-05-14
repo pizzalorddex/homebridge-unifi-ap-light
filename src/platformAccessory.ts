@@ -19,6 +19,22 @@ export class UniFiAP {
 	) {
 		this.accessPoint = this.accessory.context.accessPoint
 
+		// Fallback: Patch missing site property for cached accessories
+		if (!this.accessPoint.site) {
+			const configuredSites = this.platform.config.sites
+			let fallbackSite = 'default'
+			if (Array.isArray(configuredSites) && configuredSites.length === 1) {
+				// Try to resolve the internal site name if possible
+				const resolved = this.platform.sessionManager.getSiteName(configuredSites[0])
+				fallbackSite = resolved || configuredSites[0] || 'default'
+			}
+			this.platform.log.warn(
+				`Patching missing site for ${this.accessPoint.name}: using "${fallbackSite}"`
+			)
+			this.accessPoint.site = fallbackSite
+			this.accessory.context.accessPoint = this.accessPoint
+		}
+
 		// Initialize accessory information from the configuration.
 		const accessoryInformationService = this.accessory.getService(this.platform.Service.AccessoryInformation)
 		if (accessoryInformationService) {
