@@ -248,9 +248,17 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			this.deviceCache.setDevices(accessPoints)
 			this.log.info(`Device cache refreshed. ${accessPoints.length} devices currently available.`)
 		} catch (err) {
-			if (err instanceof UnifiAuthError || err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
-				this.log.error('Device cache refresh failed: ' + err.message)
+			if (err instanceof UnifiAuthError) {
+				this.log.error('Device cache refresh failed: Failed to detect UniFi API structure during authentication');
+			} else if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
+				this.log.error(`Device cache refresh failed: ${err.message}`)
+			} else if (err instanceof Error) {
+				this.log.error(`Device cache refresh failed: ${err.message}`)
+			} else if (typeof err === 'string') {
+				// Handles thrown string errors
+				this.log.error('Device cache refresh failed:', err)
 			} else {
+				// Handles thrown non-Error objects
 				this.log.error('Device cache refresh failed:', err)
 			}
 		}

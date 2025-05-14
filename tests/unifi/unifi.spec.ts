@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-// Example test for unifi.ts device fetching logic (to be expanded with fixtures and mocks)
 import { getAccessPoint, getAccessPoints } from '../../src/unifi.js';
 import { UnifiApiHelper, UnifiApiType } from '../../src/api/unifiApiHelper.js';
 import { Logger } from 'homebridge';

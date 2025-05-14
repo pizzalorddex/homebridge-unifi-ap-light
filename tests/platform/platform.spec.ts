@@ -266,13 +266,64 @@ describe('UnifiAPLight uncovered logic', () => {
     await (platform as any).refreshDeviceCache();
     expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: Failed to detect UniFi API structure during authentication');
   });
+  it('refreshDeviceCache logs error if no valid sites', async () => {
+    vi.spyOn(sessionManager, 'getSiteName').mockReturnValue(undefined);
+    log.error.mockClear();
+    await (platform as any).refreshDeviceCache();
+    expect(log.error).toHaveBeenCalledWith('No valid sites resolved. Aborting device cache refresh.');
+  });
 
-  it('startDeviceCacheRefreshTimer clears and sets timer', () => {
+  it('refreshDeviceCache logs info if no devices returned', async () => {
+    vi.spyOn(sessionManager, 'getSiteName').mockReturnValue('default');
+    vi.spyOn(unifi, 'getAccessPoints').mockResolvedValueOnce([]);
+    log.info.mockClear();
+    await (platform as any).refreshDeviceCache();
+    expect(log.info).toHaveBeenCalledWith('Device cache refreshed. 0 devices currently available.');
+  });
+
+  it('startDeviceCacheRefreshTimer can be called multiple times safely', () => {
     (platform as any).refreshTimer = setInterval(() => {}, 1000);
     const clearSpy = vi.spyOn(global, 'clearInterval');
     const setSpy = vi.spyOn(global, 'setInterval');
     (platform as any).startDeviceCacheRefreshTimer();
-    expect(clearSpy).toHaveBeenCalled();
-    expect(setSpy).toHaveBeenCalled();
+    (platform as any).startDeviceCacheRefreshTimer();
+    expect(clearSpy).toHaveBeenCalledTimes(2);
+    expect(setSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshDeviceCache handles thrown string error', async () => {
+    vi.restoreAllMocks();
+    vi.spyOn(sessionManager, 'getSiteName').mockReturnValue('default');
+    vi.spyOn(sessionManager, 'authenticate').mockResolvedValueOnce(undefined); // Ensure authentication succeeds
+    vi.spyOn(unifi, 'getAccessPoints').mockImplementation(() => Promise.reject('string error'));
+    log.error.mockClear();
+    await (platform as any).refreshDeviceCache();
+    // Accept either two-argument or single-string logger call
+    const calls = log.error.mock.calls;
+    const found = calls.some(args =>
+      (args.length === 2 && args[0] === 'Device cache refresh failed:' && args[1] === 'string error') ||
+      (args.length === 1 && args[0] === 'Device cache refresh failed: string error')
+    );
+    if (!found) {
+      throw new Error('log.error was not called with expected arguments for string error. Calls: ' + JSON.stringify(calls));
+    }
+  });
+
+  it('refreshDeviceCache handles thrown non-Error object', async () => {
+    vi.restoreAllMocks();
+    vi.spyOn(sessionManager, 'getSiteName').mockReturnValue('default');
+    vi.spyOn(sessionManager, 'authenticate').mockResolvedValueOnce(undefined); // Ensure authentication succeeds
+    vi.spyOn(unifi, 'getAccessPoints').mockImplementation(() => Promise.reject({ foo: 'bar' }));
+    log.error.mockClear();
+    await (platform as any).refreshDeviceCache();
+    // Accept either two-argument or single-string logger call
+    const calls = log.error.mock.calls;
+    const found = calls.some(args =>
+      (args.length === 2 && args[0] === 'Device cache refresh failed:' && args[1] && args[1].foo === 'bar') ||
+      (args.length === 1 && typeof args[0] === 'string' && args[0].includes('Device cache refresh failed:') && args[0].includes('foo'))
+    );
+    if (!found) {
+      throw new Error('log.error was not called with expected arguments for non-Error object. Calls: ' + JSON.stringify(calls));
+    }
   });
 });
