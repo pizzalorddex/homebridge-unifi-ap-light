@@ -1,37 +1,45 @@
 ---
 name: Bug Report
-about: Create a report to help us improve
+about: Create a report to help us improve the plugin
 title: ''
 labels: bug
 assignees: ''
-
 ---
 
-<!-- You must use the issue template below when submitting a bug -->
+<!--
+Thank you for taking the time to report a bug.
 
-**Describe The Bug:**
-<!-- A clear and concise description of what the bug is. -->
+Please fill out *all* required sections. Issues without enough detail may be closed without review.
+-->
+
+**Describe the Bug:**
+<!-- A clear and concise description of the problem. -->
 
 **To Reproduce:**
-<!-- Steps to reproduce the behavior. -->
+<!-- Steps to reproduce the issue.
+Example:
+1. Start Homebridge
+2. Turn on light via Home app
+3. Observe error in log
+-->
 
-**Expected behavior:**
-<!-- A clear and concise description of what you expected to happen. -->
+**Expected Behavior:**
+<!-- What should have happened if everything were working correctly? -->
 
 **Logs:**
-
 ```
-Show the Homebridge logs here, remove any sensitive information.
+Please include **Homebridge logs in debug mode** (start with `-D`).
+Make sure to redact sensitive info like IPs, MACs, usernames, etc.
 ```
 
 **Plugin Config:**
-
 ```json
-Show your Homebridge config.json here, remove any sensitive information.
+Include your `config.json` portion for this plugin only.
+Redact sensitive info if needed.
 ```
 
 **Screenshots:**
-<!-- If applicable, add screenshots to help explain your problem. -->
+<!-- Add screenshots if applicable. -->
 
 **Environment:**
 
@@ -41,4 +49,4 @@ Show your Homebridge config.json here, remove any sensitive information.
 * **NPM Version**: <!-- npm -v -->
 * **Operating System**: <!-- Raspbian / Ubuntu / Debian / Windows / macOS / Docker / hb-service -->
 
-<!-- Click the "Preview" tab before you submit to ensure the formatting is correct. -->
+<!-- Tip: Click the "Preview" tab before submitting to confirm formatting. -->

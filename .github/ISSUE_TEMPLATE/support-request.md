@@ -4,28 +4,34 @@ about: Need help?
 title: ''
 labels: question
 assignees: ''
-
 ---
 
-<!-- You must use the issue template below when submitting a support request -->
+<!--
+Thank you for reaching out! Please use this template for general support questions.
+
+Make sure to check the README, existing issues, and Discussions (if enabled) before submitting.
+-->
 
 **Describe Your Problem:**
-<!-- A clear and concise description of what problem you are trying to solve. -->
+<!--
+A clear and concise description of the issue or goal you're trying to achieve.
+Example: "I can't get the access point lights to turn off via HomeKit."
+-->
 
 **Logs:**
-
 ```
-Show the Homebridge logs here, remove any sensitive information.
+Please include **Homebridge logs in debug mode** (start with `-D`).
+Be sure to remove any sensitive information like IPs, usernames, MAC addresses, etc.
 ```
 
 **Plugin Config:**
-
 ```json
-Show your Homebridge config.json here, remove any sensitive information.
+Include the relevant section of your `config.json`.
+Redact passwords or sensitive info.
 ```
 
 **Screenshots:**
-<!-- If applicable, add screenshots to help explain your problem. -->
+<!-- Add screenshots if applicable to help illustrate your issue. -->
 
 **Environment:**
 
@@ -35,4 +41,4 @@ Show your Homebridge config.json here, remove any sensitive information.
 * **NPM Version**: <!-- npm -v -->
 * **Operating System**: <!-- Raspbian / Ubuntu / Debian / Windows / macOS / Docker / hb-service -->
 
-<!-- Click the "Preview" tab before you submit to ensure the formatting is correct. -->
+<!-- Tip: Click the "Preview" tab before submitting to check formatting. -->
