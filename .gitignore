@@ -27,3 +27,10 @@ yarn-error.log*
 
 # OS cruft
 .DS_Store
+
+# API Testing
+API Testing/
+
+# Test coverage
+coverage/
+lcov-report/

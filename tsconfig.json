@@ -11,7 +11,8 @@
     "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true
   },
   "include": ["src/"],
   "exclude": ["**/*.spec.ts"]

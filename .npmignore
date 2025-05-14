@@ -3,6 +3,7 @@ src/
 
 # Test coverage
 coverage/
+lcov-report/
 .nyc_output
 
 # Lint/TS cache
@@ -20,3 +21,6 @@ coverage/
 # Env vars
 .env
 .env.test
+
+# API Testing
+API Testing/
