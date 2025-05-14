@@ -1,7 +1,7 @@
 {
   "displayName": "UniFi Access Point Light",
   "name": "homebridge-unifi-ap-light",
-  "version": "1.4.5-beta.1",
+  "version": "1.4.5",
   "description": "Control the blue LED ring on your UniFi APs!",
   "license": "Apache-2.0",
   "type": "module",
