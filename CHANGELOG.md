@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - Ensures restored accessories from cache work correctly after multi-site support
 - No longer logs "missing site information" errors for affected users
 
----
+## [1.4.4] - 2025-05-14
 
-Older release notes can be added below as needed.
+### What's Changed
+- Add multi-site support for UniFi OS and self-hosted controllers
+- Improved device discovery and filtering
+- Enhanced debug logging and error handling
