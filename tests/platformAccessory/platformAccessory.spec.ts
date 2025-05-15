@@ -71,4 +71,124 @@ describe('UniFiAP Accessory', () => {
     const result = await accessory.getOn();
     expect(result).toBe(true);
   });
+
+  it('should patch missing site and log a warning', () => {
+    const logSpy = { ...mockPlatform.log, warn: vi.fn() };
+    const noSiteDevice = { ...mockAccessory.context.accessPoint, site: undefined };
+    const noSiteAccessory = {
+      ...mockAccessory,
+      context: { accessPoint: { ...noSiteDevice } },
+    };
+    const singleSiteConfig = {
+      ...mockPlatform,
+      config: { sites: ['mysite'] },
+      sessionManager: { ...mockPlatform.sessionManager, getSiteName: vi.fn(() => 'mysite-internal') },
+      log: logSpy,
+      getDeviceCache: () => ({
+        getDeviceById: vi.fn(() => noSiteDevice),
+        getAllDevices: vi.fn(() => [noSiteDevice]),
+        setDevices: vi.fn(),
+      }),
+    };
+    new UniFiAP(singleSiteConfig as any as UnifiAPLight, noSiteAccessory as any as PlatformAccessory);
+    expect(logSpy.warn).toHaveBeenCalledWith(expect.stringContaining('Patching missing site'));
+  });
+
+  it('should log a warning if AccessoryInformation service is missing', () => {
+    const accessoryInfoMissing = { ...mockAccessory, getService: vi.fn((svc) => (svc === mockPlatform.Service.AccessoryInformation ? undefined : mockService)) };
+    new UniFiAP(mockPlatform as any as UnifiAPLight, accessoryInfoMissing as any as PlatformAccessory);
+    expect(mockPlatform.log.warn).toHaveBeenCalledWith('Accessory Information Service not found.');
+  });
+
+  it('should add Lightbulb service if not found', () => {
+    const lightbulbMissing = { ...mockAccessory, getService: vi.fn(() => undefined), addService: vi.fn(() => mockService) };
+    new UniFiAP(mockPlatform as any as UnifiAPLight, lightbulbMissing as any as PlatformAccessory);
+    expect(lightbulbMissing.addService).toHaveBeenCalled();
+  });
+
+  it('setOn: should log error and not update cache on non-200 response', async () => {
+    mockPlatform.sessionManager.request.mockResolvedValueOnce({ status: 500 });
+    await accessory.setOn(true);
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('Unexpected response status'));
+    expect(sharedMockCache.setDevices).not.toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ led_override: 'on' })]));
+  });
+
+  it('setOn: should handle UnifiAuthError and set Not Responding', async () => {
+    const error = new (class extends Error { })();
+    Object.setPrototypeOf(error, { constructor: { name: 'UnifiAuthError' } });
+    mockPlatform.sessionManager.request.mockRejectedValueOnce(error);
+    await accessory.setOn(true);
+    expect(mockPlatform.log.error).toHaveBeenCalled();
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+  });
+
+  it('setOn: should handle generic error and set Not Responding', async () => {
+    mockPlatform.sessionManager.request.mockRejectedValueOnce({ message: 'fail' });
+    await accessory.setOn(true);
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('fail'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+  });
+
+  it('setOn: should update ledSettings for udm', async () => {
+    const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: { enabled: false } };
+    sharedMockCache.getDeviceById.mockReturnValue(udm);
+    accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory);
+    await accessory.setOn(true);
+    expect(udm.ledSettings.enabled).toBe(true);
+  });
+
+  it('setOn: should update led_override for uap', async () => {
+    const uap = { ...mockAccessory.context.accessPoint, type: 'uap', led_override: 'off' };
+    sharedMockCache.getDeviceById.mockReturnValue(uap);
+    accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory);
+    await accessory.setOn(true);
+    expect(uap.led_override).toBe('on');
+  });
+
+  it('getOn: should log error and set Not Responding if device not in cache', async () => {
+    sharedMockCache.getDeviceById.mockImplementation(() => { return undefined as any; });
+    const result = await accessory.getOn();
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('not found in cache'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+    expect(result).toBe(false);
+  });
+
+  it('getOn: should log error and set Not Responding if ledSettings.enabled is undefined', async () => {
+    const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: {} };
+    sharedMockCache.getDeviceById.mockReturnValue(udm);
+    const result = await accessory.getOn();
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('enabled'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+    expect(result).toBe(false);
+  });
+
+  it('getOn: should handle UnifiApiError and set Not Responding', async () => {
+    sharedMockCache.getDeviceById.mockImplementation(() => { throw new (class extends Error { })(); });
+    const result = await accessory.getOn();
+    expect(mockPlatform.log.error).toHaveBeenCalled();
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+    expect(result).toBe(false);
+  });
+
+  it('getOn: should return correct value for udm with ledSettings.enabled true/false', async () => {
+    const udmOn = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: { enabled: true } };
+    sharedMockCache.getDeviceById.mockReturnValue(udmOn);
+    let result = await accessory.getOn();
+    expect(result).toBe(true);
+    const udmOff = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: { enabled: false } };
+    sharedMockCache.getDeviceById.mockReturnValue(udmOff);
+    result = await accessory.getOn();
+    expect(result).toBe(false);
+  });
+
+  it('getOn: should return correct value for uap with led_override on/off', async () => {
+    const uapOn = { ...mockAccessory.context.accessPoint, type: 'uap', led_override: 'on' };
+    sharedMockCache.getDeviceById.mockReturnValue(uapOn);
+    let result = await accessory.getOn();
+    expect(result).toBe(true);
+    const uapOff = { ...mockAccessory.context.accessPoint, type: 'uap', led_override: 'off' };
+    sharedMockCache.getDeviceById.mockReturnValue(uapOff);
+    result = await accessory.getOn();
+    expect(result).toBe(false);
+  });
 });
