@@ -39,11 +39,15 @@ export class SessionManager {
 	 */
 	async authenticate(): Promise<void> {
 		this.log.debug('Starting authentication...')
-		const instance = Axios.create({
-			baseURL: `https://${this.host}`,
-			httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-		})
-
+		let instance: AxiosInstance
+		try {
+			instance = Axios.create({
+				baseURL: `https://${this.host}`,
+				httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+			})
+		} catch (err) {
+			throw new UnifiAuthError('Failed to create Axios instance for authentication', err)
+		}
 		let apiType = this.apiHelper.getApiType()
 		try {
 			if (!apiType) {
@@ -117,6 +121,8 @@ export class SessionManager {
 				return await this.axiosInstance(config)
 			} else if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ENOTFOUND') {
 				throw new UnifiNetworkError('Network error communicating with UniFi controller', axiosError)
+			} else if (error instanceof UnifiApiError || error instanceof UnifiAuthError || error instanceof UnifiNetworkError) {
+				throw error
 			} else {
 				throw new UnifiApiError('API request failed', axiosError)
 			}
@@ -133,23 +139,27 @@ export class SessionManager {
 		// Loads available sites from the controller using the correct endpoint for the detected API structure.
 		// Populates the siteMap for friendly name resolution.
 		const url = this.apiHelper.getSitesEndpoint()
+		this.siteMap.clear();
 		try {
 			const response = await this.request({ url, method: 'get' })
 			const sites: UnifiSite[] = response?.data?.data
 			if (Array.isArray(sites)) {
 				for (const site of sites) {
-					if (site.desc) 
-						this.siteMap.set(site.desc, site.name)
-					if (site.name) 
-						this.siteMap.set(site.name, site.name)
+					if (site.desc) this.siteMap.set(site.desc, site.name)
+					if (site.name) this.siteMap.set(site.name, site.name)
 				}
 				this.log.debug(`Loaded sites from ${url}: ${Array.from(this.siteMap.keys()).join(', ')}`)
 			} else {
-				throw new Error('Unexpected site list structure')
+				throw new UnifiApiError('Unexpected site list structure', { response })
 			}
 		} catch (error) {
-			this.log.error(`Failed to load site list from ${url}: ${error}`)
-			throw error
+			if (error instanceof UnifiApiError) {
+				this.log.error(`Failed to load site list from ${url}: ${error.message}`)
+				throw error
+			} else {
+				this.log.error(`Failed to load site list from ${url}: ${error instanceof Error ? error.message : error}`)
+				throw new UnifiApiError('Failed to load site list', error)
+			}
 		}
 	}
 
