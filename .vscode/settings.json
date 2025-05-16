@@ -4,5 +4,6 @@
     "source.fixAll.eslint": "explicit"
   },
   "editor.rulers": [ 140 ],
-  "eslint.enable": true
+  "eslint.enable": true,
+  "chat.agent.maxRequests": 150
 }

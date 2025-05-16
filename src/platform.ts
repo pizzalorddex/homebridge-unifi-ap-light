@@ -22,7 +22,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	public sessionManager: SessionManager
 	public readonly Service: typeof Service = this.api.hap.Service
 	public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic
-	public readonly accessories: PlatformAccessory[] = []
+	private _accessories: PlatformAccessory[]
 	private deviceCache: DeviceCache = new DeviceCache()
 	private refreshIntervalMs: number // Set refresh interval from config or default to 10 minutes
 	private refreshTimer: NodeJS.Timeout | null = null
@@ -53,11 +53,15 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			? this.config.refreshIntervalMinutes
 			: 10) * 60 * 1000
 
-		this.api.on('didFinishLaunching', () => {
-			this.log.debug('Finished loading, starting device discovery.')
-			this.discoverDevices()
-			this.startDeviceCacheRefreshTimer()
-		})
+		this._accessories = [];
+
+		this.api.on('didFinishLaunching', this.handleDidFinishLaunching.bind(this));
+	}
+
+	private handleDidFinishLaunching() {
+		this.log.debug('Finished loading, starting device discovery.');
+		this.discoverDevices();
+		this.startDeviceCacheRefreshTimer();
 	}
 
 	/**
@@ -98,18 +102,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	 */
 	configureAccessory(accessory: PlatformAccessory): void {
 		this.log.info('Loading accessory from cache:', accessory.displayName)
-		this.accessories.push(accessory)
-	}
-
-	/**
-	 * Helper to provide a request function with apiHelper property for getAccessPoints
-	 *
-	 * @returns {Function} The request function with apiHelper property attached.
-	 */
-	private getApiRequestWithHelper() {
-		const request = this.sessionManager.request.bind(this.sessionManager) as typeof this.sessionManager.request & { apiHelper: any }
-		request.apiHelper = this.sessionManager.getApiHelper()
-		return request
+		this._accessories.push(accessory)
 	}
 
 	/**
@@ -173,25 +166,39 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 				const isExcluded = this.config.excludeIds?.includes(accessPoint._id) || false
 
 				// Find if there is already an accessory registered in Homebridge with the same UUID.
-				const existingAccessory = this.accessories.find(acc => acc.UUID === uuid)
+				const existingAccessory = this._accessories.find(acc => acc.UUID === uuid)
 
 				if (existingAccessory) {
-					if (!isIncluded || isExcluded) {
-						// If the accessory is not included or explicitly excluded, remove it from Homebridge.
-						this.log.info(`Removing accessory from cache due to exclusion settings: ${existingAccessory.displayName} (${accessPoint._id})`)
-						this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory])
-					} else {
+					if (isIncluded && !isExcluded) {
 						// If the accessory exists and is still included, restore it from cache without re-registering.
 						this.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id})`)
 						new UniFiAP(this, existingAccessory)
+					} else if (isExcluded) {
+						// If the accessory is not included or explicitly excluded, remove it from Homebridge.
+						this.log.info(`Removing accessory from cache due to exclusion settings: ${existingAccessory && (existingAccessory as any).displayName} (${accessPoint._id})`)
+						try {
+							this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory])
+						} catch (err) {
+							this.log.error('Error during unregisterPlatformAccessories: ' + (err as Error).message)
+						}
+						// Remove from _accessories array as well
+						const idx = this._accessories.findIndex(acc => acc.UUID === existingAccessory.UUID)
+						if (idx !== -1) {
+							this._accessories.splice(idx, 1)
+						}
 					}
 				} else if (isIncluded && !isExcluded) {
 					// If the accessory is new, included, and not excluded, register it as a new accessory.
-					this.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id})`)
 					const newAccessory = new this.api.platformAccessory(accessPoint.name, uuid)
+					this._accessories.push(newAccessory)
+					this.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id})`)
 					newAccessory.context.accessPoint = accessPoint
 					new UniFiAP(this, newAccessory)
-					this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [newAccessory])
+					try {
+						this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [newAccessory])
+					} catch (err) {
+						this.log.error('Error during registerPlatformAccessories: ' + (err as Error).message)
+					}
 				}
 			}
 		} catch (error) {
@@ -286,5 +293,9 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	 */
 	getDeviceCache(): DeviceCache {
 		return this.deviceCache
+	}
+
+	public get accessories(): PlatformAccessory[] {
+		return this._accessories;
 	}
 }

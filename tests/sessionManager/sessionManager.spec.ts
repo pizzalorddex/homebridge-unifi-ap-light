@@ -445,4 +445,61 @@ describe('SessionManager', () => {
     expect(() => new SessionManager('', '', '', log)).not.toThrow();
     expect(() => new SessionManager('host', 'user', 'pass', undefined as any)).not.toThrow();
   });
+
+  it('retries authentication and request on session expiration (401)', async () => {
+    const session = new SessionManager('host', 'user', 'pass', log);
+    let callCount = 0;
+    const axiosMock = vi.fn().mockImplementation(() => {
+      if (callCount++ === 0) {
+        const err: any = new Error('401');
+        err.response = { status: 401 };
+        throw err;
+      }
+      return { data: 'ok' };
+    });
+    (session as any).axiosInstance = Object.assign(axiosMock, {
+      defaults: { headers: { common: {} } },
+      interceptors: {},
+      getUri: vi.fn(),
+      create: vi.fn(),
+      request: axiosMock,
+    });
+    const authenticateSpy = vi.spyOn(session, 'authenticate').mockResolvedValue(undefined);
+    const result = await session.request({});
+    expect(result).toEqual({ data: 'ok' });
+    expect(authenticateSpy).toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith('Session expired, retrying authentication...');
+  });
+
+  it('handles multiple concurrent authenticate calls (race condition)', async () => {
+    const session = new SessionManager('host', 'user', 'pass', log);
+    let resolve: () => void = () => {};
+    const authPromise = new Promise<void>(res => { resolve = res; });
+    vi.spyOn(session, 'authenticate').mockImplementation(() => authPromise);
+    // Simulate two concurrent requests that both trigger authenticate
+    const req1 = session.authenticate();
+    const req2 = session.authenticate();
+    // Both should resolve when the promise resolves
+    setTimeout(() => resolve(), 10);
+    await expect(req1).resolves.toBeUndefined();
+    await expect(req2).resolves.toBeUndefined();
+  });
+
+  it('api: handles rate limiting (429) and logs appropriately', async () => {
+    const session = new SessionManager('host', 'user', 'pass', log);
+    const axiosMock = vi.fn().mockImplementation(() => {
+      const err: any = new Error('429');
+      err.response = { status: 429 };
+      throw err;
+    });
+    (session as any).axiosInstance = Object.assign(axiosMock, {
+      defaults: { headers: { common: {} } },
+      interceptors: {},
+      getUri: vi.fn(),
+      create: vi.fn(),
+      request: axiosMock,
+    });
+    await expect(session.request({})).rejects.toBeInstanceOf(Error);
+    expect(log.warn).not.toBeCalledWith('Session expired, retrying authentication...');
+  });
 });

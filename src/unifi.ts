@@ -30,7 +30,7 @@ export async function getAccessPoint(
  * @param {unknown} data The data to check.
  * @returns {boolean} True if the data is a UnifiApiResponse, false otherwise.
  */
-function isUnifiApiResponse<T>(data: unknown): data is UnifiApiResponse<T> {
+export function isUnifiApiResponse<T>(data: unknown): data is UnifiApiResponse<T> {
 	return typeof data === 'object' && data !== null && Array.isArray((data as UnifiApiResponse<T>).data)
 }
 

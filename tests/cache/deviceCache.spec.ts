@@ -45,4 +45,34 @@ describe('DeviceCache', () => {
     cache.setDevices([]);
     expect(cache.getAllDevices()).toHaveLength(0);
   });
+
+  it('should clear the cache', () => {
+    cache.setDevices([deviceA, deviceB]);
+    cache.clear();
+    expect(cache.getAllDevices()).toHaveLength(0);
+    expect(cache.getDeviceById('a')).toBeUndefined();
+  });
+
+  it('should not throw when clearing an already empty cache', () => {
+    expect(() => cache.clear()).not.toThrow();
+    expect(cache.getAllDevices()).toHaveLength(0);
+  });
+
+  it('cache handles large number of devices and clears all', async () => {
+    const cache = new (await import('../../src/cache/deviceCache.js')).DeviceCache();
+    const devices = Array.from({ length: 1000 }, (_, i) => ({
+      _id: `id${i}`,
+      mac: `00:11:22:33:44:${(i % 100).toString().padStart(2, '0')}`,
+      site: 'default',
+      type: 'uap',
+      model: 'UAP',
+      name: `AP${i}`,
+      serial: `serial${i}`,
+      version: 'v1',
+    }));
+    cache.setDevices(devices);
+    expect(cache.getAllDevices().length).toBe(1000);
+    cache.clear();
+    expect(cache.getAllDevices().length).toBe(0);
+  });
 });

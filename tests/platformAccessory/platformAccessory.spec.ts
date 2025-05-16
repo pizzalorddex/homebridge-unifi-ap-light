@@ -191,4 +191,102 @@ describe('UniFiAP Accessory', () => {
     result = await accessory.getOn();
     expect(result).toBe(false);
   });
+
+  it('should set all AccessoryInformation characteristics when service is present', () => {
+    const infoService = {
+      setCharacteristic: vi.fn().mockReturnThis(),
+    };
+    const accessoryWithInfo = {
+      ...mockAccessory,
+      getService: vi.fn((svc) => svc === mockPlatform.Service.AccessoryInformation ? infoService : mockService),
+    };
+    new UniFiAP(mockPlatform as any as UnifiAPLight, accessoryWithInfo as any as PlatformAccessory);
+    expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.Manufacturer, 'Ubiquiti');
+    expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.Model, mockAccessory.context.accessPoint.model);
+    expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.SerialNumber, mockAccessory.context.accessPoint.serial);
+    expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.FirmwareRevision, mockAccessory.context.accessPoint.version);
+  });
+
+  it('should not add Lightbulb service if already present', () => {
+    const getServiceSpy = vi.fn(() => mockService);
+    const addServiceSpy = vi.fn(() => mockService);
+    const accessoryWithLightbulb = { ...mockAccessory, getService: getServiceSpy, addService: addServiceSpy };
+    new UniFiAP(mockPlatform as any as UnifiAPLight, accessoryWithLightbulb as any as PlatformAccessory);
+    expect(getServiceSpy).toHaveBeenCalledWith(mockPlatform.Service.Lightbulb);
+    expect(addServiceSpy).not.toHaveBeenCalled();
+  });
+
+  it('should use context accessPoint if device not found in cache (constructor)', () => {
+    const contextDevice = { ...mockAccessory.context.accessPoint, name: 'Context AP', _id: 'context1' };
+    const contextAccessory = { ...mockAccessory, context: { accessPoint: contextDevice } };
+    const platformWithEmptyCache = {
+      ...mockPlatform,
+      getDeviceCache: () => ({
+        getDeviceById: vi.fn(() => undefined),
+        getAllDevices: vi.fn(() => []),
+        setDevices: vi.fn(),
+      }),
+    };
+    const instance = new UniFiAP(platformWithEmptyCache as any as UnifiAPLight, contextAccessory as any as PlatformAccessory);
+    expect(instance.accessPoint).toBe(contextDevice);
+  });
+
+  it('setOn: should handle UnifiApiError and set Not Responding', async () => {
+    class UnifiApiError extends Error { constructor(msg: string) { super(msg); } }
+    mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiApiError('api error'));
+    await accessory.setOn(true);
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('api error'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+  });
+
+  it('setOn: should handle UnifiNetworkError and set Not Responding', async () => {
+    class UnifiNetworkError extends Error { constructor(msg: string) { super(msg); } }
+    mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiNetworkError('network error'));
+    await accessory.setOn(true);
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('network error'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+  });
+
+  it('setOn: should not throw if udm has no ledSettings', async () => {
+    const udm = { ...mockAccessory.context.accessPoint, type: 'udm' };
+    sharedMockCache.getDeviceById.mockReturnValue(udm);
+    accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory);
+    await expect(accessory.setOn(true)).resolves.not.toThrow();
+  });
+
+  it('getOn: should handle UnifiAuthError and set Not Responding', async () => {
+    class UnifiAuthError extends Error { constructor(msg: string) { super(msg); } }
+    sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiAuthError('auth error'); });
+    const result = await accessory.getOn();
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('auth error'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+    expect(result).toBe(false);
+  });
+
+  it('getOn: should handle UnifiApiError and set Not Responding', async () => {
+    class UnifiApiError extends Error { constructor(msg: string) { super(msg); } }
+    sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiApiError('api error'); });
+    const result = await accessory.getOn();
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('api error'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+    expect(result).toBe(false);
+  });
+
+  it('getOn: should handle UnifiNetworkError and set Not Responding', async () => {
+    class UnifiNetworkError extends Error { constructor(msg: string) { super(msg); } }
+    sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiNetworkError('network error'); });
+    const result = await accessory.getOn();
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('network error'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+    expect(result).toBe(false);
+  });
+
+  it('getOn: should log error and set Not Responding if udm has no ledSettings', async () => {
+    const udm = { ...mockAccessory.context.accessPoint, type: 'udm' };
+    sharedMockCache.getDeviceById.mockReturnValue(udm);
+    const result = await accessory.getOn();
+    expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('enabled'));
+    expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'));
+    expect(result).toBe(false);
+  });
 });
