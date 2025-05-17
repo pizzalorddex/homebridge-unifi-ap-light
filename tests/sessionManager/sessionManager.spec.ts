@@ -443,13 +443,13 @@ describe('SessionManager', () => {
 			vi.spyOn(session, 'request').mockRejectedValue(err)
 			await expect(session['loadSites']()).rejects.toBe(err)
 			// Update error log assertions for new message format
-			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to load site list from /api/self/sites for host "host": fail'))
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to load site list from /api/self/sites: fail'))
 		})
 		it('should log and wrap non-UnifiApiError in loadSites', async () => {
 			const session = new SessionManager('host', 'user', 'pass', log)
 			vi.spyOn(session, 'request').mockRejectedValue(new Error('fail'))
 			await expect(session['loadSites']()).rejects.toBeInstanceOf(UnifiApiError)
-			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to load site list from /api/self/sites for host "host": fail'))
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to load site list from /api/self/sites: fail'))
 		})
 		it('should warn on unknown site in getSiteName', () => {
 			const session = new SessionManager('host', 'user', 'pass', log)

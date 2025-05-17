@@ -56,9 +56,7 @@ describe('UnifiAPLight Platform Initialization and Config Validation', () => {
 		mockLogger.info.mockClear()
 		const accessory = { displayName: 'Test', UUID: 'uuid-1', context: { accessPoint: { _id: 'ap-id', site: 'mysite' } } } as any
 		platform.configureAccessory(accessory)
-		expect(mockLogger.info).toHaveBeenCalledWith(
-			'Loading accessory from cache: Test (id: ap-id) site="mysite"'
-		)
+		expect(mockLogger.info).toHaveBeenCalledWith('Loading accessory from cache: Test (id: ap-id, site: mysite)')
 	})
 
 	it('should directly cover all branches of validateConfig', () => {
@@ -593,7 +591,7 @@ describe('Platform API: Getters and Logging', () => {
 	it('should call debug log in handleDidFinishLaunching', () => {
 		const debugSpy = mockLogger.debug
 		platform['handleDidFinishLaunching']()
-		expect(debugSpy).toHaveBeenCalledWith('Finished loading, starting device discovery. [platform]')
+		expect(debugSpy).toHaveBeenCalledWith('Finished loading, starting device discovery...')
 	})
 
 	it('should call discoverDevices and startDeviceCacheRefreshTimer in handleDidFinishLaunching', async () => {
@@ -603,7 +601,8 @@ describe('Platform API: Getters and Logging', () => {
 		await platform['handleDidFinishLaunching']()
 		expect(discoverSpy).toHaveBeenCalled()
 		expect(startTimerSpy).toHaveBeenCalled()
-		expect(debugSpy).toHaveBeenCalledWith('Finished loading, starting device discovery. [platform]')
+		expect(debugSpy).toHaveBeenCalledWith('Initializing UniFi AP Light platform: Test Platform (host: localhost)')
+		expect(debugSpy).toHaveBeenCalledWith('Finished loading, starting device discovery...')
 	})
 
 	it('should return deviceCache from getDeviceCache', () => {
