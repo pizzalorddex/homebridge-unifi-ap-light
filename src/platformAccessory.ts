@@ -103,6 +103,7 @@ export class UniFiAP {
 				return
 			} else {
 				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): Unexpected response status ${response.status}`)
+				// Do not update cache on error
 			}
 		} catch (error) {
 			if (error instanceof UnifiAuthError || error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
@@ -116,6 +117,7 @@ export class UniFiAP {
 				this.platform.Characteristic.On,
 				new Error('Not Responding')
 			)
+			// Do not update cache on error
 		}
 	}
 

@@ -307,7 +307,8 @@ describe('Device Discovery and Accessory Management', () => {
 	it('calls restoreAccessory if accessory is present and isIncluded and not isExcluded', async () => {
 		const ap = { _id: 'id3', name: 'AP3', type: 'uap', site: 'default', model: 'UAP', serial: 'SN', version: 'v', mac: '00:11:22:33:44:57' }
 		const uuid = mockApi.hap.uuid.generate(ap._id)
-		const accessory = { UUID: uuid, displayName: ap.name, context: { accessPoint: ap } } as any
+		// Add a getService stub to the mock accessory to prevent TypeError
+		const accessory = { UUID: uuid, displayName: ap.name, context: { accessPoint: ap }, getService: vi.fn(() => undefined) } as any
 		platform['_accessories'].push(accessory)
 		platform.config.includeIds = [ap._id]
 		platform.config.excludeIds = []

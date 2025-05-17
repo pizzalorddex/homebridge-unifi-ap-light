@@ -118,6 +118,11 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			} else {
 				this.log.error(`Unexpected error during authentication: ${err instanceof Error ? err.message : String(err)}`)
 			}
+			// Mark all accessories as Not Responding and clear cache
+			for (const accessory of this._accessories) {
+				markAccessoryNotResponding(this, accessory)
+			}
+			this.deviceCache.clear()
 			return
 		}
 
@@ -183,9 +188,19 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 		} catch (err) {
 			if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
 				this.log.error(`Device discovery failed: ${err.message}`)
+				// Mark all accessories as Not Responding and clear cache
+				for (const accessory of this._accessories) {
+					markAccessoryNotResponding(this, accessory)
+				}
+				this.deviceCache.clear()
 			} else {
 				const axiosError = err as AxiosError
 				this.log.error(`Device discovery failed: ${axiosError.message ?? err}`)
+				// Mark all accessories as Not Responding and clear cache
+				for (const accessory of this._accessories) {
+					markAccessoryNotResponding(this, accessory)
+				}
+				this.deviceCache.clear()
 			}
 		}
 	}
@@ -247,10 +262,11 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 				// Handles thrown non-Error objects
 				this.log.error('Device cache refresh failed:', err)
 			}
-			// Mark all accessories as Not Responding in HomeKit
+			// Mark all accessories as Not Responding in HomeKit and clear cache
 			for (const accessory of this._accessories) {
 				markAccessoryNotResponding(this, accessory)
 			}
+			this.deviceCache.clear()
 		}
 	}
 
