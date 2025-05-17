@@ -1,4 +1,4 @@
-import { AxiosError } from 'axios'
+import { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { Logger } from 'homebridge'
 import { UnifiDevice, UnifiApiResponse } from './models/unifiTypes.js'
 import { UnifiApiHelper } from './api/unifiApiHelper.js'
@@ -15,7 +15,7 @@ import { UnifiApiHelper } from './api/unifiApiHelper.js'
  */
 export async function getAccessPoint(
 	id: string,
-	requestFunction: (config: any) => Promise<any>,
+	requestFunction: (config: AxiosRequestConfig) => Promise<AxiosResponse<UnifiApiResponse<UnifiDevice>>>,
 	apiHelper: UnifiApiHelper,
 	sites: string[],
 	log: Logger
@@ -45,7 +45,7 @@ export function isUnifiApiResponse<T>(data: unknown): data is UnifiApiResponse<T
  * @returns {Promise<UnifiDevice[]>} Aggregated array of access points across all sites.
  */
 export async function getAccessPoints(
-	request: (config: any) => Promise<any>,
+	request: (config: AxiosRequestConfig) => Promise<AxiosResponse<UnifiApiResponse<UnifiDevice>>>,
 	apiHelper: UnifiApiHelper,
 	sites: string[],
 	log: Logger
@@ -60,11 +60,11 @@ export async function getAccessPoints(
 			if (isUnifiApiResponse<UnifiDevice>(response.data)) {
 				// Filter and return only devices of type 'uap' and 'udm'
 				const devices = response.data.data
-					.filter((device: any) =>
+					.filter((device: UnifiDevice) =>
 						device.type === 'uap' ||
             (device.type === 'udm' && (device.model === 'UDM' || device.model === 'UDR'))
 					)
-					.map((device: any) => ({
+					.map((device: UnifiDevice) => ({
 						...device,
 						site, // tag the device with its site name
 					}))

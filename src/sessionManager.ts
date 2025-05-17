@@ -1,5 +1,5 @@
 import { Logger } from 'homebridge'
-import Axios, { AxiosInstance, AxiosError } from 'axios'
+import Axios, { AxiosInstance, AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import jwt from 'jsonwebtoken'
 import https from 'https'
 import { parse as parseCookie } from 'cookie'
@@ -72,8 +72,8 @@ export class SessionManager {
 				try {
 					const parsed = parseCookie(setCookie.join('; '))
 					token = parsed['TOKEN'] ?? ''
-					const decoded = jwt.decode(token) as any
-					csrfToken = decoded?.csrfToken
+					const decoded = jwt.decode(token) as { csrfToken?: string } | null;
+					csrfToken = decoded?.csrfToken ?? '';
 				} catch (err) {
 					this.log.error(`Cookie parsing or token decoding failed: ${err}`)
 					throw new UnifiAuthError('UniFi OS authentication failed: Malformed cookie or token.', err)
@@ -103,11 +103,11 @@ export class SessionManager {
 	/**
 	 * Makes an authenticated API request, retrying authentication on 401.
 	 *
-	 * @param {any} config Axios request config object.
-	 * @returns {Promise<any>} The API response.
+	 * @param {AxiosRequestConfig} config Axios request config object.
+	 * @returns {Promise<AxiosResponse>} The API response.
 	 * @throws {UnifiApiError|UnifiAuthError|UnifiNetworkError} On failure.
 	 */
-	async request(config: any): Promise<any> {
+	async request(config: AxiosRequestConfig): Promise<AxiosResponse> {
 		if (!this.axiosInstance) {
 			throw new UnifiAuthError('Cannot make API request: No authenticated session.')
 		}

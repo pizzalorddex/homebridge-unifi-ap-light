@@ -1,6 +1,7 @@
 import { UniFiAP } from './platformAccessory.js';
 import type { UnifiAPLight } from './platform.js';
 import type { PlatformAccessory } from 'homebridge';
+import type { UnifiDevice } from './models/unifiTypes.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 /**
@@ -18,7 +19,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
  * @param uuid - The HomeKit UUID for the accessory
  * @returns The created and registered PlatformAccessory
  */
-export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: any, uuid: string): PlatformAccessory {
+export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, uuid: string): PlatformAccessory {
   // Create a new Homebridge accessory instance
   const accessory = new platform.api.platformAccessory(accessPoint.name, uuid);
   // Store the UniFi device in the accessory context for later reference
@@ -44,7 +45,7 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
  * @param accessPoint - The UniFi device object
  * @param existingAccessory - The cached PlatformAccessory to restore
  */
-export function restoreAccessory(platform: UnifiAPLight, accessPoint: any, existingAccessory: PlatformAccessory): void {
+export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, existingAccessory: PlatformAccessory): void {
   platform.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id})`);
   // Re-initialize the accessory logic (restores event handlers, etc.)
   new UniFiAP(platform, existingAccessory);

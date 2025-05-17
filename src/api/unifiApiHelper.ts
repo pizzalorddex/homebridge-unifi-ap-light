@@ -5,6 +5,7 @@
  * the correct API endpoints for device and site operations.
  */
 import { AxiosInstance } from 'axios'
+import { Logger } from 'homebridge'
 
 /**
  * Enum for UniFi API structure types.
@@ -35,7 +36,7 @@ export class UnifiApiHelper {
 	 * @returns {Promise<UnifiApiType>} The detected API type.
 	 * @throws {Error} If neither endpoint succeeds.
 	 */
-	async detectApiType(instance: AxiosInstance, username: string, password: string, log: any): Promise<UnifiApiType> {
+	async detectApiType(instance: AxiosInstance, username: string, password: string, log: Logger): Promise<UnifiApiType> {
 		try {
 			log.debug('Trying UniFi OS authentication...')
 			await instance.post('/api/auth/login', { username, password, rememberMe: true })
