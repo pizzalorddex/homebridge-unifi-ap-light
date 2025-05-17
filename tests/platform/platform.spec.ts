@@ -51,24 +51,30 @@ describe('UnifiAPLight Platform Initialization and Config Validation', () => {
 		platform.configureAccessory(accessory)
 		expect(platform.accessories).toContain(accessory)
 	})
-})
 
-// --- Device Discovery and Accessory Management ---
-describe('Device Discovery and Accessory Management', () => {
-	let platform: UnifiAPLight
-	let sessionManager: SessionManager
-	let mockApi: ReturnType<typeof createMockApi>
-
-	beforeEach(() => {
-		vi.clearAllMocks()
-		mockApi = createMockApi()
-		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
-		sessionManager = platform.sessionManager
-		mockApi.registerPlatformAccessories.mockClear()
-		mockApi.unregisterPlatformAccessories.mockClear()
-		mockLogger.warn.mockClear()
-		mockLogger.error.mockClear()
+	it('should log info when loading accessory from cache in configureAccessory', () => {
 		mockLogger.info.mockClear()
+		const accessory = { displayName: 'Test', UUID: 'uuid-1', context: { accessPoint: { _id: 'ap-id', site: 'mysite' } } } as any
+		platform.configureAccessory(accessory)
+		expect(mockLogger.info).toHaveBeenCalledWith(
+			'Loading accessory from cache: Test (id: ap-id) site="mysite"'
+		)
+	})
+
+	it('should directly cover all branches of validateConfig', () => {
+		const proto = Object.getPrototypeOf(platform)
+		const valid = { host: 'h', username: 'u', password: 'p' }
+		// Happy path
+		expect(() => proto.validateConfig.call(platform, valid)).not.toThrow()
+		// Each error branch
+		expect(() => proto.validateConfig.call(platform, { ...valid, host: undefined })).toThrow('host')
+		expect(() => proto.validateConfig.call(platform, { ...valid, username: undefined })).toThrow('username')
+		expect(() => proto.validateConfig.call(platform, { ...valid, password: undefined })).toThrow('password')
+		expect(() => proto.validateConfig.call(platform, { ...valid, sites: 'not-array' })).toThrow('sites')
+		expect(() => proto.validateConfig.call(platform, { ...valid, includeIds: 'not-array' })).toThrow('includeIds')
+		expect(() => proto.validateConfig.call(platform, { ...valid, excludeIds: 'not-array' })).toThrow('excludeIds')
+		expect(() => proto.validateConfig.call(platform, { ...valid, refreshIntervalMinutes: 0 })).toThrow('refreshIntervalMinutes')
+		expect(() => proto.validateConfig.call(platform, { ...valid, refreshIntervalMinutes: 'bad' })).toThrow('refreshIntervalMinutes')
 	})
 
 	// Config validation edge cases
@@ -94,6 +100,25 @@ describe('Device Discovery and Accessory Management', () => {
 			expect(() => new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any)).toThrow()
 			expect(mockLogger.error).toHaveBeenCalled()
 		}
+	})
+})
+
+// --- Device Discovery and Accessory Management ---
+describe('Device Discovery and Accessory Management', () => {
+	let platform: UnifiAPLight
+	let sessionManager: SessionManager
+	let mockApi: ReturnType<typeof createMockApi>
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		mockApi = createMockApi()
+		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
+		sessionManager = platform.sessionManager
+		mockApi.registerPlatformAccessories.mockClear()
+		mockApi.unregisterPlatformAccessories.mockClear()
+		mockLogger.warn.mockClear()
+		mockLogger.error.mockClear()
+		mockLogger.info.mockClear()
 	})
 
 	// Error handling for discoverDevices
@@ -571,6 +596,16 @@ describe('Platform API: Getters and Logging', () => {
 		expect(debugSpy).toHaveBeenCalledWith('Finished loading, starting device discovery. [platform]')
 	})
 
+	it('should call discoverDevices and startDeviceCacheRefreshTimer in handleDidFinishLaunching', async () => {
+		const discoverSpy = vi.spyOn(platform, 'discoverDevices').mockResolvedValue(undefined)
+		const startTimerSpy = vi.spyOn(platform as any, 'startDeviceCacheRefreshTimer').mockImplementation(() => {})
+		const debugSpy = mockLogger.debug
+		await platform['handleDidFinishLaunching']()
+		expect(discoverSpy).toHaveBeenCalled()
+		expect(startTimerSpy).toHaveBeenCalled()
+		expect(debugSpy).toHaveBeenCalledWith('Finished loading, starting device discovery. [platform]')
+	})
+
 	it('should return deviceCache from getDeviceCache', () => {
 		expect(platform.getDeviceCache()).toBeInstanceOf(DeviceCache)
 	})
@@ -594,6 +629,5 @@ describe('Platform API: Getters and Logging', () => {
 		expect(mockLogger.debug).not.toHaveBeenCalledWith(expect.stringContaining('No valid sites'))
 		expect(mockLogger.warn).not.toHaveBeenCalled()
 		expect(mockLogger.error).not.toHaveBeenCalled()
-		// Optionally, check that debug/info was called for discovery
 	})
 })
