@@ -194,6 +194,25 @@ describe('SessionManager', () => {
 					cause: expect.any(Error),
 				})
 			})
+			it('should authenticate successfully with self-hosted controller and set headers', async () => {
+				const session = new SessionManager('host', 'user', 'pass', log);
+				(session as any).apiHelper.apiType = UnifiApiType.SelfHosted
+				// Simulate a valid session cookie
+				const setCookie = ['unifises=validsession; Path=/; HttpOnly;']
+				const post = vi.fn().mockResolvedValue({ headers: { 'set-cookie': setCookie } })
+				const defaults = { headers: { common: {} } }
+				vi.spyOn(Axios, 'create').mockReturnValue({ post, defaults } as any)
+				// Mock loadSites to avoid side effects
+				vi.spyOn(session as any, 'loadSites').mockResolvedValue(undefined)
+				await expect(session.authenticate()).resolves.toBeUndefined()
+				// Check that headers are set
+				expect(defaults.headers.common['Cookie']).toContain('unifises=validsession')
+				// Should call /api/login with correct payload
+				expect(post).toHaveBeenCalledWith('/api/login', {
+					username: 'user',
+					password: 'pass',
+				})
+			})
 		})
 		describe('Concurrency', () => {
 			it('handles multiple concurrent authenticate calls (race condition)', async () => {
