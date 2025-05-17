@@ -26,15 +26,15 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
 	accessory.context.accessPoint = accessPoint
 	// Add the accessory to the platform's internal array
 	platform.accessories.push(accessory)
-	const siteInfo = accessPoint.site ? `site="${accessPoint.site}"` : ''
-	platform.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id}) ${siteInfo}`)
+	const siteInfo = accessPoint.site ? `site: ${accessPoint.site}` : ''
+	platform.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id} ${siteInfo})`)
 	// Initialize the HomeKit service and characteristics
 	new UniFiAP(platform, accessory)
 	try {
 		// Register the accessory with Homebridge
 		platform.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory])
 	} catch (err) {
-		platform.log.error(`Error during registerPlatformAccessories for ${accessPoint.name} (${accessPoint._id}) ${siteInfo}: ${(err as Error).message}`)
+		platform.log.error(`Error during registerPlatformAccessories for ${accessPoint.name} (${accessPoint._id} ${siteInfo}): ${(err as Error).message}`)
 	}
 	return accessory
 }
@@ -48,7 +48,7 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
  */
 export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, existingAccessory: PlatformAccessory): void {
 	const siteInfo = accessPoint.site ? `site="${accessPoint.site}"` : ''
-	platform.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id}) ${siteInfo}`)
+	platform.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id} ${siteInfo})`)
 	// Re-initialize the accessory logic (restores event handlers, etc.)
 	new UniFiAP(platform, existingAccessory)
 }
@@ -61,13 +61,13 @@ export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevic
  */
 export function removeAccessory(platform: UnifiAPLight, accessory: PlatformAccessory): void {
 	const ap = accessory.context.accessPoint
-	const siteInfo = ap?.site ? `site="${ap.site}"` : ''
-	platform.log.info(`Removing accessory from cache due to exclusion settings: ${accessory.displayName} (${ap?._id}) ${siteInfo}`)
+	const siteInfo = ap?.site ? `site: ${ap.site}` : ''
+	platform.log.info(`Removing accessory from cache due to exclusion settings: ${accessory.displayName} (${ap?._id} ${siteInfo})`)
 	try {
 		// Unregister the accessory from Homebridge
 		platform.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory])
 	} catch (err) {
-		platform.log.error(`Error during unregisterPlatformAccessories for ${accessory.displayName} (${ap?._id}) ${siteInfo}: ${(err as Error).message}`)
+		platform.log.error(`Error during unregisterPlatformAccessories for ${accessory.displayName} (${ap?._id} ${siteInfo}): ${(err as Error).message}`)
 	}
 	// Remove the accessory from the platform's internal array
 	const idx = platform.accessories.findIndex(acc => acc.UUID === accessory.UUID)

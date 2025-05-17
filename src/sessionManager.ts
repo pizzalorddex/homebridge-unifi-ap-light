@@ -153,16 +153,16 @@ export class SessionManager {
 						// If only desc is present, do not map it
 					}
 				}
-				this.log.debug(`Loaded sites from ${url} for host "${this.host}": ${Array.from(this.siteMap.keys()).join(', ')}`)
+				this.log.debug(`Loaded sites from ${url}: ${Array.from(this.siteMap.keys()).join(', ')}`)
 			} else {
 				throw new UnifiApiError('Unexpected site list structure', { response })
 			}
 		} catch (error) {
 			if (error instanceof UnifiApiError) {
-				this.log.error(`Failed to load site list from ${url} for host "${this.host}": ${error.message}`)
+				this.log.error(`Failed to load site list from ${url}: ${error.message}`)
 				throw error
 			} else {
-				this.log.error(`Failed to load site list from ${url} for host "${this.host}": ${error instanceof Error ? error.message : error}`)
+				this.log.error(`Failed to load site list from ${url}: ${error instanceof Error ? error.message : error}`)
 				throw new UnifiApiError('Failed to load site list', error)
 			}
 		}

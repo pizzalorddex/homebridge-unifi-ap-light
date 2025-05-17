@@ -58,7 +58,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	}
 
 	private handleDidFinishLaunching() {
-		this.log.debug('Finished loading, starting device discovery. [platform]')
+		this.log.debug('Finished loading, starting device discovery...')
 		this.discoverDevices()
 		this.startDeviceCacheRefreshTimer()
 	}
@@ -100,7 +100,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	 * @returns {void}
 	 */
 	configureAccessory(accessory: PlatformAccessory): void {
-		this.log.info(`Loading accessory from cache: ${accessory.displayName} (id: ${accessory.context.accessPoint?._id}) site="${accessory.context.accessPoint?.site ?? 'unknown'}"`)
+		this.log.info(`Loading accessory from cache: ${accessory.displayName} (id: ${accessory.context.accessPoint?._id}, site: ${accessory.context.accessPoint?.site ?? 'unknown'})`)
 		this._accessories.push(accessory)
 	}
 
