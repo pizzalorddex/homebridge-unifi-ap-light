@@ -2,9 +2,9 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { AxiosError } from 'axios'
 import { DeviceCache } from './cache/deviceCache.js'
 import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError, UnifiConfigError, UnifiAPLightConfig } from './models/unifiTypes.js'
+import { markAccessoryNotResponding, restoreAccessory, removeAccessory, createAndRegisterAccessory } from './accessoryFactory.js';
 
 import { SessionManager } from './sessionManager.js'
-import { UniFiAP } from './platformAccessory.js'
 import { getAccessPoints } from './unifi.js'
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
 
@@ -171,34 +171,14 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 				if (existingAccessory) {
 					if (isIncluded && !isExcluded) {
 						// If the accessory exists and is still included, restore it from cache without re-registering.
-						this.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id})`)
-						new UniFiAP(this, existingAccessory)
+						restoreAccessory(this, accessPoint, existingAccessory)
 					} else if (isExcluded) {
 						// If the accessory is not included or explicitly excluded, remove it from Homebridge.
-						this.log.info(`Removing accessory from cache due to exclusion settings: ${existingAccessory && (existingAccessory as any).displayName} (${accessPoint._id})`)
-						try {
-							this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory])
-						} catch (err) {
-							this.log.error('Error during unregisterPlatformAccessories: ' + (err as Error).message)
-						}
-						// Remove from _accessories array as well
-						const idx = this._accessories.findIndex(acc => acc.UUID === existingAccessory.UUID)
-						if (idx !== -1) {
-							this._accessories.splice(idx, 1)
-						}
+						removeAccessory(this, existingAccessory)
 					}
 				} else if (isIncluded && !isExcluded) {
 					// If the accessory is new, included, and not excluded, register it as a new accessory.
-					const newAccessory = new this.api.platformAccessory(accessPoint.name, uuid)
-					this._accessories.push(newAccessory)
-					this.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id})`)
-					newAccessory.context.accessPoint = accessPoint
-					new UniFiAP(this, newAccessory)
-					try {
-						this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [newAccessory])
-					} catch (err) {
-						this.log.error('Error during registerPlatformAccessories: ' + (err as Error).message)
-					}
+					createAndRegisterAccessory(this, accessPoint, uuid);
 				}
 			}
 		} catch (error) {
@@ -267,6 +247,10 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			} else {
 				// Handles thrown non-Error objects
 				this.log.error('Device cache refresh failed:', err)
+			}
+			// Mark all accessories as Not Responding in HomeKit
+			for (const accessory of this._accessories) {
+				markAccessoryNotResponding(this, accessory)
 			}
 		}
 	}

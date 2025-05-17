@@ -6,8 +6,13 @@ Control the light rings on your UniFi Access Point(s) with HomeKit!
 - **Dynamic Discovery:** Automatically discovers UniFi APs across one or more specified sites.
 - **Real-time Updates:** Changes made in HomeKit instantly reflect on your access points.
 - **Advanced Filtering:** Include or exclude specific APs by ID.
-- **Compatiblity:** Supports self-hosted and Ubiquiti-hosted (e.g. UDM) UniFi API structures.
+- **Compatibility:** Supports self-hosted and UniFi OS API structures.
 - **Session Management:** Robust handling of cookie- and token-based API authentication.
+- **Device Cache:** Device state is cached and refreshed periodically (default: every 10 minutes).
+
+## Requirements
+- **Node.js:** >=20.0.0 <23.0.0
+- **Homebridge:** >=1.5.0
 
 ## Installation
 Search for `homebridge-unifi-ap-light` in the Homebridge UI, or run:
@@ -66,6 +71,18 @@ yarn global add homebridge-unifi-ap-light
 - `includeIds`: Only devices with these IDs will be shown in HomeKit.
 - `excludeIds`: Devices with these IDs will always be excluded, even if included elsewhere.
 
+### Device Cache Refresh
+- The plugin refreshes its device cache every 10 minutes by default. You can change this interval with the `refreshIntervalMinutes` config option:
+
+```json
+{
+  "refreshIntervalMinutes": 5
+}
+```
+*Set the device cache refresh interval to 5 minutes (default is 10).*
+
+- If the controller is unreachable during a refresh, the plugin logs an error and retries at the next interval.
+
 ## Debugging Tips
 
 - Run Homebridge in debug mode (`homebridge -D`) to view detailed logs.
@@ -78,5 +95,28 @@ yarn global add homebridge-unifi-ap-light
   Site "xyz" is not recognized by the controller (api.err.NoSiteContext).
   ```
 
+## Troubleshooting / FAQ
+
+- **Authentication fails:**
+  - Make sure you are using a UniFi OS local user, not a UI.com account.
+  - Double-check your username and password.
+- **Site not recognized:**
+  - Check the spelling and case of your site name.
+  - Use the internal site name if the friendly name does not work.
+- **No devices found:**
+  - Ensure your user has permission to view devices in the UniFi controller.
+  - Check network connectivity between Homebridge and the UniFi controller.
+
+## HomeKit "Not Responding" Behavior
+
+If the UniFi controller is unreachable (due to network issues, authentication errors, or API failures), HomeKit will show your UniFi AP Light accessories as "Not Responding." This is intentional: the plugin will mark the accessory as unavailable in HomeKit until communication with the controller is restored. Once the controller is reachable again, the accessory will automatically resume normal operation.
+
+- You may see a "Not Responding" message in the Home app if the controller is offline or credentials are invalid.
+- All error handling is robustly tested to ensure HomeKit accurately reflects the accessory's status.
+
+## Quality
+
+This plugin is fully covered by automated tests and maintains high code coverage.
+
 ## License
-This project is licensed under the MIT License — see the LICENSE file for details.
+This project is licensed under the Apache 2.0 License — see the [LICENSE](LICENSE) file for details.

@@ -8,7 +8,11 @@ export default defineConfig({
       provider: 'istanbul',
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: './coverage',
-      exclude: ['**/fixtures/**', '**/index.ts'],
+      exclude: [
+        '**/fixtures/**',
+        '**/index.ts',
+        '.eslintrc.js',
+      ],
     },
     include: ['tests/**/*.spec.ts'],
   },

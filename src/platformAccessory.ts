@@ -2,7 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
 import { AxiosError, AxiosResponse } from 'axios'
 import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError } from './models/unifiTypes.js'
 
-import { UnifiAPLight } from './platform.js'
+import type { UnifiAPLight } from './platform.js'
 
 /**
  * UniFiAP Homebridge Accessory
@@ -111,8 +111,11 @@ export class UniFiAP {
 				const axiosError = error as AxiosError
 				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: ${axiosError.message}`)
 			}
-			// Optionally, set accessory to Not Responding
-			this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
+			// Set accessory to Not Responding using Error('Not Responding')
+			this.service.updateCharacteristic(
+				this.platform.Characteristic.On,
+				new Error('Not Responding')
+			)
 		}
 	}
 
@@ -126,7 +129,10 @@ export class UniFiAP {
 			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 			if (!cached) {
 				this.platform.log.error(`Device ${this.accessPoint.name} not found in cache.`)
-				this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
+				this.service.updateCharacteristic(
+					this.platform.Characteristic.On,
+					new Error('Not Responding')
+				)
 				return false
 			}
 			if (cached.type === 'udm') {
@@ -136,7 +142,10 @@ export class UniFiAP {
 					return isOn
 				} else {
 					this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${cached.name}`)
-					this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
+					this.service.updateCharacteristic(
+						this.platform.Characteristic.On,
+						new Error('Not Responding')
+					)
 					return false
 				}
 			} else {
@@ -150,8 +159,35 @@ export class UniFiAP {
 			} else {
 				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name}: ${error}`)
 			}
-			this.service.updateCharacteristic(this.platform.Characteristic.On, new Error('Not Responding'))
+			this.service.updateCharacteristic(
+				this.platform.Characteristic.On,
+				new Error('Not Responding')
+			)
 			return false
+		}
+	}
+
+	/**
+	 * Mark this accessory as Not Responding in HomeKit.
+	 * Can be called from the platform on cache/network errors.
+	 */
+	public markNotResponding(): void {
+		this.service.updateCharacteristic(
+			this.platform.Characteristic.On,
+			new Error('Not Responding')
+		)
+	}
+
+	/**
+	 * Static helper to mark a PlatformAccessory as Not Responding (for use from platform).
+	 */
+	static markNotRespondingForAccessory(platform: UnifiAPLight, accessory: PlatformAccessory): void {
+		const service = accessory.getService(platform.Service.Lightbulb)
+		if (service) {
+			service.updateCharacteristic(
+				platform.Characteristic.On,
+				new Error('Not Responding')
+			)
 		}
 	}
 }
