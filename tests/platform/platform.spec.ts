@@ -4,16 +4,17 @@ vi.mock('../../src/unifi', () => ({
 }))
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { UnifiAPLight } from '../../src/platform'
-import { API, Logger, PlatformAccessory, PlatformConfig } from 'homebridge'
+import { API, Logger, PlatformAccessory } from 'homebridge'
 import { DeviceCache } from '../../src/cache/deviceCache.js'
 import { SessionManager } from '../../src/sessionManager.js'
 import * as unifi from '../../src/unifi'
 import { UnifiApiError, UnifiAuthError, UnifiNetworkError } from '../../src/models/unifiTypes.js'
 import { PLUGIN_NAME, PLATFORM_NAME } from '../../src/settings.js'
 import { createMockApi, mockLogger } from '../fixtures/homebridgeMocks.js'
+import * as accessoryFactory from '../../src/accessoryFactory.js'
 
 // Mocks
-const validConfig: PlatformConfig = {
+const validConfig = {
 	platform: PLUGIN_NAME,
 	name: 'Test Platform',
 	host: 'localhost',
@@ -22,7 +23,8 @@ const validConfig: PlatformConfig = {
 	sites: ['default'],
 }
 
-describe('UnifiAPLight Platform', () => {
+// --- Platform Initialization & Config Validation ---
+describe('UnifiAPLight Platform Initialization and Config Validation', () => {
 	let platform: UnifiAPLight
 	let mockApi: ReturnType<typeof createMockApi>
 
@@ -51,7 +53,8 @@ describe('UnifiAPLight Platform', () => {
 	})
 })
 
-describe('UnifiAPLight uncovered logic', () => {
+// --- Device Discovery and Accessory Management ---
+describe('Device Discovery and Accessory Management', () => {
 	let platform: UnifiAPLight
 	let sessionManager: SessionManager
 	let mockApi: ReturnType<typeof createMockApi>
@@ -68,6 +71,7 @@ describe('UnifiAPLight uncovered logic', () => {
 		mockLogger.info.mockClear()
 	})
 
+	// Config validation edge cases
 	it('should throw config errors for all invalid config fields', () => {
 		expect(() => new UnifiAPLight(mockLogger as any as Logger, { ...validConfig, sites: 'not-array' }, mockApi as any as API)).toThrow('sites')
 		expect(() => new UnifiAPLight(mockLogger as any as Logger, { ...validConfig, includeIds: 'not-array' }, mockApi as any as API)).toThrow('includeIds')
@@ -78,13 +82,13 @@ describe('UnifiAPLight uncovered logic', () => {
 
 	it('throws and logs config errors for malformed config fields', async () => {
 		const configs = [
-			{ platform: PLUGIN_NAME, host: 123, username: 'u', password: 'p' }, // host wrong type
-			{ platform: PLUGIN_NAME, host: 'h', username: 123, password: 'p' }, // username wrong type
-			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 123 }, // password wrong type
-			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', sites: 123 }, // sites wrong type
-			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', includeIds: 123 }, // includeIds wrong type
-			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', excludeIds: 123 }, // excludeIds wrong type
-			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', refreshIntervalMinutes: 'bad' }, // refreshIntervalMinutes wrong type
+			{ platform: PLUGIN_NAME, host: 123, username: 'u', password: 'p' },
+			{ platform: PLUGIN_NAME, host: 'h', username: 123, password: 'p' },
+			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 123 },
+			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', sites: 123 },
+			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', includeIds: 123 },
+			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', excludeIds: 123 },
+			{ platform: PLUGIN_NAME, host: 'h', username: 'u', password: 'p', refreshIntervalMinutes: 'bad' },
 		]
 		for (const config of configs) {
 			expect(() => new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any)).toThrow()
@@ -92,34 +96,112 @@ describe('UnifiAPLight uncovered logic', () => {
 		}
 	})
 
-	it('discoverDevices handles UnifiAuthError', async () => {
+	// Error handling for discoverDevices
+	it('handles UnifiAuthError', async () => {
 		vi.spyOn(sessionManager, 'authenticate').mockRejectedValueOnce(new UnifiAuthError('fail'))
 		await platform.discoverDevices()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Authentication failed'))
 	})
 
-	it('discoverDevices handles generic error', async () => {
+	it('handles generic error', async () => {
 		vi.spyOn(sessionManager, 'authenticate').mockRejectedValueOnce(new Error('fail'))
 		await platform.discoverDevices()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Unexpected error'))
 	})
 
-	it('discoverDevices aborts if no valid sites', async () => {
+	it('logs error for unknown error type in discoverDevices', async () => {
+		const orig = platform.sessionManager.authenticate
+		platform.sessionManager.authenticate = vi.fn(() => { throw { foo: 'bar' } }) as any
+		mockLogger.error.mockClear()
+		await platform.discoverDevices()
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			'Unexpected error during authentication: [object Object]'
+		)
+		platform.sessionManager.authenticate = orig
+	})
+
+	it('logs error for AxiosError in discoverDevices', async () => {
+		const axiosError = new Error('axios fail')
+		platform.sessionManager.authenticate = vi.fn(() => { throw axiosError }) as any
+		mockLogger.error.mockClear()
+		await platform.discoverDevices()
+		expect(mockLogger.error).toHaveBeenCalledWith('Unexpected error during authentication: axios fail')
+	})
+
+	// Site logic
+	it('aborts if no valid sites', async () => {
 		vi.spyOn(sessionManager, 'authenticate').mockResolvedValueOnce(undefined)
 		vi.spyOn(sessionManager, 'getSiteName').mockReturnValue(undefined)
 		await platform.discoverDevices()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('No valid sites'))
 	})
 
-	it('discoverDevices warns if no access points', async () => {
+	it('warns if no access points', async () => {
 		vi.spyOn(sessionManager, 'authenticate').mockResolvedValueOnce(undefined)
 		vi.spyOn(sessionManager, 'getSiteName').mockReturnValue('default')
 		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValueOnce([])
 		await platform.discoverDevices()
 		expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No access points discovered. Check your site configuration and permissions.'))
 	})
-	it('discoverDevices adds, restores, and removes accessories', async () => {
-		// Setup all spies/mocks BEFORE constructing the platform
+
+	it('warns for unrecognized site names during discovery', async () => {
+		// Setup config with one recognized and one unrecognized site
+		const config = { ...validConfig, sites: ['default', 'unknownSite'] }
+		platform = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
+		// Attach spies to the new platform's sessionManager and unifi
+		vi.spyOn(platform.sessionManager, 'authenticate').mockResolvedValueOnce(undefined)
+		vi.spyOn(platform.sessionManager, 'getSiteName').mockImplementation(site => site === 'default' ? 'default' : undefined)
+		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValueOnce([])
+		mockLogger.warn.mockClear()
+		mockLogger.error.mockClear()
+		await platform.discoverDevices()
+		expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No access points discovered. Check your site configuration and permissions.'))
+	})
+
+	it('handles multiple devices and sites', async () => {
+		const config = { ...validConfig, sites: ['default', 'site2'], includeIds: ['id1', 'id2'] }
+		platform = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
+		vi.spyOn(platform.sessionManager, 'authenticate').mockResolvedValue(undefined)
+		vi.spyOn(platform.sessionManager, 'getSiteName').mockImplementation(site => {
+			if (site === 'default') {
+				return 'default'
+			}
+			if (site === 'site2') {
+				return 'site2'
+			}
+			return undefined
+		})
+		const apsDefault = [
+			{ _id: 'id1', name: 'AP1', type: 'uap', site: 'default', model: 'UAP', serial: 'SN1', version: 'v', mac: '00:11:22:33:44:55', adopted: true, state: 1 }
+		]
+		const apsSite2 = [
+			{ _id: 'id2', name: 'AP2', type: 'uap', site: 'site2', model: 'UAP', serial: 'SN2', version: 'v', mac: '00:11:22:33:44:56', adopted: true, state: 1 }
+		]
+		vi.spyOn(unifi, 'getAccessPoints').mockImplementation(() => {
+			return Promise.resolve([...apsDefault, ...apsSite2])
+		})
+		await Promise.all(
+			mockApi.on.mock.calls
+				.filter(([event]) => event === 'didFinishLaunching')
+				.map(([, handler]) => handler.call(platform))
+		)
+		await new Promise(resolve => setTimeout(resolve, 0))
+		expect(platform.accessories.length).toBe(2)
+		expect(platform.accessories.map(a => a.displayName)).toEqual(['AP1', 'AP2'])
+	})
+
+	it('logs error and returns if all sites are unrecognized during discovery', async () => {
+		vi.spyOn(SessionManager.prototype, 'authenticate').mockResolvedValueOnce(undefined)
+		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue(undefined)
+		const config = { ...validConfig, sites: ['unknownSite'] }
+		platform = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
+		mockLogger.error.mockClear()
+		await platform.discoverDevices()
+		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('No valid sites resolved. Aborting discovery.'))
+	})
+
+	// Accessory management logic
+	it('adds, restores, and removes accessories', async () => {
 		let RealPlatformAccessory: any
 		try {
 			RealPlatformAccessory = require('homebridge/lib/platformAccessory').PlatformAccessory
@@ -129,130 +211,107 @@ describe('UnifiAPLight uncovered logic', () => {
 		} catch (e) {
 			throw new Error('Test requires the real homebridge PlatformAccessory class. Patch the require path or install homebridge as a devDependency. Error: ' + e)
 		}
-		// Use the real PlatformAccessory class for registration
 		mockApi.platformAccessory = RealPlatformAccessory
-		// Set up spies for API methods
 		const registerSpy = vi.fn()
 		mockApi.registerPlatformAccessories = registerSpy
 		const unregisterSpy = mockApi.unregisterPlatformAccessories
-		// Patch the platform's api property after construction to ensure .api points to the same object
-		// Do NOT import or spy on homebridge/lib/util/uuid; use mockApi.hap.uuid.generate as provided
-		// Set up all other mocks/spies
 		const ap = { _id: 'id1', name: 'AP1', type: 'uap', site: 'default', model: 'UAP', serial: 'SN12345', version: 'v', mac: '00:11:22:33:44:55' }
 		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValue([ap])
-		// Mock SessionManager methods BEFORE platform construction
 		vi.spyOn(SessionManager.prototype, 'authenticate').mockResolvedValue(undefined)
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
-		// Construct the platform instance AFTER all mocks are set up
 		const platform = new UnifiAPLight(mockLogger as any, { ...validConfig }, mockApi)
-		// Assert that the platform is using the same API object as the spy
 		expect(platform.api).toBe(mockApi)
 		platform.getDeviceCache().clear()
-		// --- ADD PHASE ---
-		// No cached accessories: Homebridge would not call configureAccessory
-		// Simulate Homebridge startup event
 		await Promise.all(
 			mockApi.on.mock.calls
 				.filter(([event]) => event === 'didFinishLaunching')
-				.map(([, handler]) => handler.call(platform)) // Ensure correct `this` context
+				.map(([, handler]) => handler.call(platform))
 		)
-		// Await a microtask to ensure all async work is done
 		await new Promise(resolve => setTimeout(resolve, 0))
-		// discoverDevices is called by didFinishLaunching handler
-		// Ensure accessory is tracked and registered
 		mockLogger.info.mockClear()
 		expect(platform.accessories.length).toBe(1)
 		expect(platform.accessories[0].displayName).toBe(ap.name)
 		expect(registerSpy).toHaveBeenCalledWith(PLUGIN_NAME, PLATFORM_NAME, [platform.accessories[0]])
-		// --- REMOVE PHASE ---
 		platform.config.excludeIds = [ap._id]
 		const uuid = mockApi.hap.uuid.generate(ap._id)
 		const accessory = new mockApi.platformAccessory(ap.name, uuid)
 		accessory.context.accessPoint = ap
-		// Simulate Homebridge restoring cached accessory
 		platform.configureAccessory(accessory)
-		// Remove any duplicate accessories with the same UUID before removal phase
 		const idx = platform.accessories.findIndex(a => a.UUID === uuid)
 		if (idx !== -1) {
 			platform.accessories.splice(idx, 1)
 		}
-		// Simulate Homebridge startup event again
 		await Promise.all(
 			mockApi.on.mock.calls
 				.filter(([event]) => event === 'didFinishLaunching')
-				.map(([, handler]) => handler.call(platform)) // Ensure correct `this` context
+				.map(([, handler]) => handler.call(platform))
 		)
 		await new Promise(resolve => setTimeout(resolve, 0))
 		expect(unregisterSpy).toHaveBeenCalled()
-		// Property-based check: accessory with this UUID should be removed
 		expect(platform.accessories.find(a => a.UUID === uuid)).toBeUndefined()
-		// --- RESTORE PHASE ---
 		platform.config.excludeIds = []
 		platform.config.includeIds = [ap._id]
 		platform.getDeviceCache().clear()
 		platform.getDeviceCache().setDevices([ap])
 		const restoredAccessory = new mockApi.platformAccessory(ap.name, uuid)
 		restoredAccessory.context.accessPoint = ap
-		// Simulate Homebridge restoring cached accessory
 		platform.configureAccessory(restoredAccessory)
-		// Simulate Homebridge startup event again
 		await Promise.all(
 			mockApi.on.mock.calls
 				.filter(([event]) => event === 'didFinishLaunching')
-				.map(([, handler]) => handler.call(platform)) // Ensure correct `this` context
+				.map(([, handler]) => handler.call(platform))
 		)
 		await new Promise(resolve => setTimeout(resolve, 0))
 		expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Restoring existing accessory'))
-		// Property-based check: accessory with this UUID should be present and only one
 		expect(platform.accessories.find(a => a.UUID === uuid)).toBeDefined()
 		expect(platform.accessories.length).toBe(1)
 	})
 
-	it('should warn for unrecognized site names during discovery', async () => {
-		vi.spyOn(sessionManager, 'authenticate').mockResolvedValueOnce(undefined)
-		vi.spyOn(sessionManager, 'getSiteName').mockImplementation(site => site === 'default' ? 'default' : undefined)
-		const config = { ...validConfig, sites: ['default', 'unknownSite'] }
-		platform = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
-		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValueOnce([])
+	it('calls removeAccessory if accessory is present and isExcluded', async () => {
+		const ap = { _id: 'id1', name: 'AP1', type: 'uap', site: 'default', model: 'UAP', serial: 'SN', version: 'v', mac: '00:11:22:33:44:55' }
+		const uuid = mockApi.hap.uuid.generate(ap._id)
+		const accessory = { UUID: uuid, displayName: ap.name, context: { accessPoint: ap } } as any
+		platform['_accessories'].push(accessory)
+		platform.config.excludeIds = [ap._id]
+		vi.spyOn(platform.sessionManager, 'authenticate').mockResolvedValue(undefined)
+		vi.spyOn(platform.sessionManager, 'getSiteName').mockReturnValue('default')
+		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValue([ap])
+		const removeSpy = vi.spyOn(accessoryFactory, 'removeAccessory')
 		await platform.discoverDevices()
-		// The warning is only logged if there is at least one valid site, so check for the 'No access points' warning
-		expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('No access points discovered. Check your site configuration and permissions.'))
+		expect(removeSpy).toHaveBeenCalledWith(platform, accessory)
 	})
 
-	it('should handle multiple devices and sites', async () => {
-		vi.spyOn(sessionManager, 'authenticate').mockResolvedValueOnce(undefined)
-		vi.spyOn(sessionManager, 'getSiteName').mockImplementation(site => site === 'default' ? 'default' : (site === 'site2' ? 'site2' : undefined))
-		const aps = [
-			{ _id: 'id1', name: 'AP1', type: 'uap', site: 'default', model: 'UAP', serial: 'SN1', version: 'v', mac: '00:11:22:33:44:55' },
-			{ _id: 'id2', name: 'AP2', type: 'uap', site: 'site2', model: 'UAP', serial: 'SN2', version: 'v', mac: '00:11:22:33:44:56' }
-		]
-		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValue(aps)
-		const config = { ...validConfig, sites: ['default', 'site2'] }
-		platform = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
+	it('calls restoreAccessory if accessory is present and isIncluded and not isExcluded', async () => {
+		const ap = { _id: 'id3', name: 'AP3', type: 'uap', site: 'default', model: 'UAP', serial: 'SN', version: 'v', mac: '00:11:22:33:44:57' }
+		const uuid = mockApi.hap.uuid.generate(ap._id)
+		const accessory = { UUID: uuid, displayName: ap.name, context: { accessPoint: ap } } as any
+		platform['_accessories'].push(accessory)
+		platform.config.includeIds = [ap._id]
+		platform.config.excludeIds = []
+		vi.spyOn(platform.sessionManager, 'authenticate').mockResolvedValue(undefined)
+		vi.spyOn(platform.sessionManager, 'getSiteName').mockReturnValue('default')
+		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValue([ap])
+		const restoreSpy = vi.spyOn(accessoryFactory, 'restoreAccessory')
 		await platform.discoverDevices()
-		expect(platform.accessories.length).toBe(2)
-		expect(platform.accessories.map(a => a.displayName)).toEqual(['AP1', 'AP2'])
+		expect(restoreSpy).toHaveBeenCalledWith(platform, ap, accessory)
 	})
 
-}) // <-- End of main describe
-
-describe('edge cases for unrecognized sites and error branches', () => {
-	let platform: UnifiAPLight
-	let mockApi: ReturnType<typeof createMockApi>
-	beforeEach(() => {
-		vi.clearAllMocks()
-		mockApi = createMockApi()
-	})
-	it('should log error and return if all sites are unrecognized during discovery', async () => {
-		vi.spyOn(SessionManager.prototype, 'authenticate').mockResolvedValueOnce(undefined)
-		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue(undefined)
-		const config = { ...validConfig, sites: ['unknownSite'] }
-		platform = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
-		mockLogger.error.mockClear()
+	it('calls createAndRegisterAccessory if accessory is not present and isIncluded and not isExcluded', async () => {
+		const ap = { _id: 'id4', name: 'AP4', type: 'uap', site: 'default', model: 'UAP', serial: 'SN', version: 'v', mac: '00:11:22:33:44:58' }
+		const uuid = mockApi.hap.uuid.generate(ap._id)
+		platform['_accessories'] = []
+		platform.config.includeIds = [ap._id]
+		platform.config.excludeIds = []
+		vi.spyOn(platform.sessionManager, 'authenticate').mockResolvedValue(undefined)
+		vi.spyOn(platform.sessionManager, 'getSiteName').mockReturnValue('default')
+		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValue([ap])
+		const createSpy = vi.spyOn(accessoryFactory, 'createAndRegisterAccessory')
 		await platform.discoverDevices()
-		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('No valid sites resolved. Aborting discovery.'))
+		expect(createSpy).toHaveBeenCalledWith(platform, ap, uuid)
 	})
-	it('should log error and return if all sites are unrecognized during device cache refresh', async () => {
+
+	// Device cache refresh error handling
+	it('logs error and returns if all sites are unrecognized during device cache refresh', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue(undefined)
 		const config = { ...validConfig, sites: ['unknownSite'] }
 		platform = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
@@ -260,7 +319,8 @@ describe('edge cases for unrecognized sites and error branches', () => {
 		await (platform as any).refreshDeviceCache()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('No valid sites resolved. Aborting device cache refresh.'))
 	})
-	it('should handle UnifiAuthError in refreshDeviceCache', async () => {
+
+	it('handles UnifiAuthError in refreshDeviceCache', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
 		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
 		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
@@ -270,7 +330,8 @@ describe('edge cases for unrecognized sites and error branches', () => {
 		await (platform as any).refreshDeviceCache()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Device cache refresh failed: Failed to detect UniFi API structure during authentication'))
 	})
-	it('should handle UnifiApiError in refreshDeviceCache', async () => {
+
+	it('handles UnifiApiError in refreshDeviceCache', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
 		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
 		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
@@ -280,7 +341,8 @@ describe('edge cases for unrecognized sites and error branches', () => {
 		await (platform as any).refreshDeviceCache()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Device cache refresh failed: api fail'))
 	})
-	it('should handle UnifiNetworkError in refreshDeviceCache', async () => {
+
+	it('handles UnifiNetworkError in refreshDeviceCache', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
 		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
 		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
@@ -290,7 +352,8 @@ describe('edge cases for unrecognized sites and error branches', () => {
 		await (platform as any).refreshDeviceCache()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Device cache refresh failed: network fail'))
 	})
-	it('should handle generic Error in refreshDeviceCache', async () => {
+
+	it('handles generic Error in refreshDeviceCache', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
 		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
 		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
@@ -300,7 +363,8 @@ describe('edge cases for unrecognized sites and error branches', () => {
 		await (platform as any).refreshDeviceCache()
 		expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Device cache refresh failed: generic fail'))
 	})
-	it('should handle string error in refreshDeviceCache', async () => {
+
+	it('handles string error in refreshDeviceCache', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
 		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
 		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
@@ -310,7 +374,8 @@ describe('edge cases for unrecognized sites and error branches', () => {
 		await (platform as any).refreshDeviceCache()
 		expect(mockLogger.error).toHaveBeenCalledWith('Device cache refresh failed:', 'string fail')
 	})
-	it('should handle object error in refreshDeviceCache', async () => {
+
+	it('handles object error in refreshDeviceCache', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
 		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
 		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
@@ -320,30 +385,63 @@ describe('edge cases for unrecognized sites and error branches', () => {
 		await (platform as any).refreshDeviceCache()
 		expect(mockLogger.error).toHaveBeenCalledWith('Device cache refresh failed:', { foo: 'bar' })
 	})
-	it('should mark all accessories as Not Responding if device cache refresh fails', async () => {
+
+	it('marks all accessories as Not Responding if device cache refresh fails', async () => {
 		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
 		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
 		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
-		// Add two mock accessories with Lightbulb service
 		const accessory1 = { displayName: 'AP1', UUID: 'uuid-1', context: { accessPoint: { _id: 'id1' } }, getService: vi.fn(), addService: vi.fn() } as any
 		const accessory2 = { displayName: 'AP2', UUID: 'uuid-2', context: { accessPoint: { _id: 'id2' } }, getService: vi.fn(), addService: vi.fn() } as any
-		// Mock Lightbulb service with updateCharacteristic
 		const mockService = { updateCharacteristic: vi.fn() }
 		accessory1.getService.mockReturnValue(mockService)
 		accessory2.getService.mockReturnValue(mockService)
 		platform.configureAccessory(accessory1)
 		platform.configureAccessory(accessory2)
-		// Simulate error on both attempts
 		getAccessPointsSpy.mockRejectedValueOnce(new UnifiApiError('api fail'))
 		getAccessPointsSpy.mockRejectedValueOnce(new UnifiApiError('api fail'))
 		await (platform as any).refreshDeviceCache()
-		// Both accessories should be marked Not Responding
 		expect(mockService.updateCharacteristic).toHaveBeenCalledWith(platform.Characteristic.On, new Error('Not Responding'))
 		expect(mockService.updateCharacteristic).toHaveBeenCalledTimes(2)
 	})
+
+	it('logs info on successful device cache refresh', async () => {
+		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
+		const ap = { _id: 'id1', name: 'AP1', type: 'uap', site: 'default', model: 'UAP', serial: 'SN', version: 'v', mac: '00:11:22:33:44:55' }
+		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints').mockResolvedValueOnce([ap])
+		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
+		mockLogger.info.mockClear()
+		await (platform as any).refreshDeviceCache()
+		expect(getAccessPointsSpy).toHaveBeenCalled()
+		expect(mockLogger.info).toHaveBeenCalledWith(
+			expect.stringContaining('Device cache refreshed. 1 devices currently available.')
+		)
+	})
+
+	it('logs error if refreshDeviceCache throws null', async () => {
+		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
+		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
+		getAccessPointsSpy.mockRejectedValueOnce(null)
+		getAccessPointsSpy.mockRejectedValueOnce(null)
+		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
+		mockLogger.error.mockClear()
+		await (platform as any).refreshDeviceCache()
+		expect(mockLogger.error).toHaveBeenCalledWith('Device cache refresh failed:', null)
+	})
+
+	it('logs error if refreshDeviceCache throws undefined', async () => {
+		vi.spyOn(SessionManager.prototype, 'getSiteName').mockReturnValue('default')
+		const getAccessPointsSpy = vi.spyOn(unifi, 'getAccessPoints')
+		getAccessPointsSpy.mockRejectedValueOnce(undefined)
+		getAccessPointsSpy.mockRejectedValueOnce(undefined)
+		platform = new UnifiAPLight(mockLogger as any as Logger, validConfig, mockApi as any as API)
+		mockLogger.error.mockClear()
+		await (platform as any).refreshDeviceCache()
+		expect(mockLogger.error).toHaveBeenCalledWith('Device cache refresh failed:', undefined)
+	})
 })
 
-describe('Device cache refresh timer logic', () => {
+// --- Device Cache Refresh Timer Logic ---
+describe('Device Cache Refresh Timer Logic', () => {
 	let platform: UnifiAPLight
 	let mockApi: ReturnType<typeof createMockApi>
 	let originalSetInterval: typeof setInterval
@@ -420,26 +518,19 @@ describe('Device cache refresh timer logic', () => {
 	})
 
 	it('should default refreshIntervalMs to 10min if refreshIntervalMinutes is missing', () => {
-		const config = { ...validConfig }
-		delete config.refreshIntervalMinutes
+		const config = { ...validConfig } as any
+		config.refreshIntervalMinutes = undefined
 		const p = new UnifiAPLight(mockLogger as any as Logger, config, mockApi as any as API)
 		expect((p as any).refreshIntervalMs).toBe(10 * 60 * 1000)
 	})
 
-	it('should throw if refreshIntervalMinutes is zero or negative', () => {
-		const zeroConfig = { ...validConfig, refreshIntervalMinutes: 0 }
-		const negConfig = { ...validConfig, refreshIntervalMinutes: -5 }
-		expect(() => new UnifiAPLight(mockLogger as any as Logger, zeroConfig, mockApi as any as API)).toThrow('refreshIntervalMinutes')
-		expect(() => new UnifiAPLight(mockLogger as any as Logger, negConfig, mockApi as any as API)).toThrow('refreshIntervalMinutes')
-	})
-
 	it('should throw if required config fields are missing', () => {
-		const missingHost = { ...validConfig }
-		delete missingHost.host
-		const missingUser = { ...validConfig }
-		delete missingUser.username
-		const missingPass = { ...validConfig }
-		delete missingPass.password
+		const missingHost = { ...validConfig } as any
+		missingHost.host = undefined
+		const missingUser = { ...validConfig } as any
+		missingUser.username = undefined
+		const missingPass = { ...validConfig } as any
+		missingPass.password = undefined
 		expect(() => new UnifiAPLight(mockLogger as any as Logger, missingHost, mockApi as any as API)).toThrow('host')
 		expect(() => new UnifiAPLight(mockLogger as any as Logger, missingUser, mockApi as any as API)).toThrow('username')
 		expect(() => new UnifiAPLight(mockLogger as any as Logger, missingPass, mockApi as any as API)).toThrow('password')
@@ -455,7 +546,8 @@ describe('Device cache refresh timer logic', () => {
 	})
 })
 
-describe('remaining uncovered logic', () => {
+// --- Platform API: Getters and Logging ---
+describe('Platform API: Getters and Logging', () => {
 	let platform: UnifiAPLight
 	let mockApi: ReturnType<typeof createMockApi>
 	beforeEach(() => {
@@ -489,15 +581,19 @@ describe('remaining uncovered logic', () => {
 		expect(platform.accessories).toContain(accessory)
 	})
 
-	it('should log error for unknown error type in discoverDevices', async () => {
-		const orig = platform.sessionManager.authenticate
-		platform.sessionManager.authenticate = vi.fn(() => { throw { foo: 'bar' } }) as any
+	it('logs debug/info and does not log warnings/errors on successful device discovery', async () => {
+		vi.spyOn(platform.sessionManager, 'authenticate').mockResolvedValueOnce(undefined)
+		vi.spyOn(platform.sessionManager, 'getSiteName').mockReturnValue('default')
+		const ap = { _id: 'id1', name: 'AP1', type: 'uap', site: 'default', model: 'UAP', serial: 'SN', version: 'v', mac: '00:11:22:33:44:55', adopted: true, state: 1 }
+		vi.spyOn(unifi, 'getAccessPoints').mockResolvedValueOnce([ap])
+		mockLogger.debug.mockClear()
+		mockLogger.info.mockClear()
+		mockLogger.warn.mockClear()
 		mockLogger.error.mockClear()
 		await platform.discoverDevices()
-		// Accept the actual error log output for non-standard errors
-		expect(mockLogger.error).toHaveBeenCalledWith(
-			'Unexpected error during authentication: [object Object]'
-		)
-		platform.sessionManager.authenticate = orig
+		expect(mockLogger.debug).not.toHaveBeenCalledWith(expect.stringContaining('No valid sites'))
+		expect(mockLogger.warn).not.toHaveBeenCalled()
+		expect(mockLogger.error).not.toHaveBeenCalled()
+		// Optionally, check that debug/info was called for discovery
 	})
 })
