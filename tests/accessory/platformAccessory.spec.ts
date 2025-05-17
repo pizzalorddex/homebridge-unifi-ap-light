@@ -95,7 +95,7 @@ describe('UniFiAP Accessory', () => {
 		it('should log a warning if AccessoryInformation service is missing', () => {
 			const accessoryInfoMissing = { ...mockAccessory, getService: vi.fn((svc) => (svc === mockPlatform.Service.AccessoryInformation ? undefined : mockService)) }
 			new UniFiAP(mockPlatform as any as UnifiAPLight, accessoryInfoMissing as any as PlatformAccessory)
-			expect(mockPlatform.log.warn).toHaveBeenCalledWith('Accessory Information Service not found for Test AP (ap1) site="default"')
+			expect(mockPlatform.log.warn).toHaveBeenCalledWith('Accessory Information Service not found for Test AP (ap1, site: default)')
 		})
 
 		it('should set all AccessoryInformation characteristics when service is present', () => {

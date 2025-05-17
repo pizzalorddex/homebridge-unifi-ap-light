@@ -47,7 +47,7 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
  * @param existingAccessory - The cached PlatformAccessory to restore
  */
 export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, existingAccessory: PlatformAccessory): void {
-	const siteInfo = accessPoint.site ? `site="${accessPoint.site}"` : ''
+	const siteInfo = accessPoint.site ? `site: ${accessPoint.site}` : ''
 	platform.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id} ${siteInfo})`)
 	// Re-initialize the accessory logic (restores event handlers, etc.)
 	new UniFiAP(platform, existingAccessory)
