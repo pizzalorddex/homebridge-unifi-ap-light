@@ -2,11 +2,10 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 import { AxiosError } from 'axios'
 import { DeviceCache } from './cache/deviceCache.js'
 import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError, UnifiConfigError, UnifiAPLightConfig } from './models/unifiTypes.js'
-import { markAccessoryNotResponding, restoreAccessory, removeAccessory, createAndRegisterAccessory } from './accessoryFactory.js';
+import { markAccessoryNotResponding, restoreAccessory, removeAccessory, createAndRegisterAccessory } from './accessoryFactory.js'
 
 import { SessionManager } from './sessionManager.js'
 import { getAccessPoints } from './unifi.js'
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js'
 
 /**
  * UnifiAPLight Homebridge Platform
@@ -45,7 +44,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 				throw err
 			}
 		}
-		this.log.debug('Initializing UniFi AP Light platform:', this.config.name)
+		this.log.debug(`Initializing UniFi AP Light platform: ${this.config.name} (host: ${this.config.host})`)
 
 		this.sessionManager = new SessionManager(this.config.host, this.config.username, this.config.password, this.log)
 
@@ -53,15 +52,15 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			? this.config.refreshIntervalMinutes
 			: 10) * 60 * 1000
 
-		this._accessories = [];
+		this._accessories = []
 
-		this.api.on('didFinishLaunching', this.handleDidFinishLaunching.bind(this));
+		this.api.on('didFinishLaunching', this.handleDidFinishLaunching.bind(this))
 	}
 
 	private handleDidFinishLaunching() {
-		this.log.debug('Finished loading, starting device discovery.');
-		this.discoverDevices();
-		this.startDeviceCacheRefreshTimer();
+		this.log.debug('Finished loading, starting device discovery. [platform]')
+		this.discoverDevices()
+		this.startDeviceCacheRefreshTimer()
 	}
 
 	/**
@@ -101,7 +100,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	 * @returns {void}
 	 */
 	configureAccessory(accessory: PlatformAccessory): void {
-		this.log.info('Loading accessory from cache:', accessory.displayName)
+		this.log.info(`Loading accessory from cache: ${accessory.displayName} (id: ${accessory.context.accessPoint?._id}) site="${accessory.context.accessPoint?.site ?? 'unknown'}"`)
 		this._accessories.push(accessory)
 	}
 
@@ -115,9 +114,9 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			await this.sessionManager.authenticate()
 		} catch (err) {
 			if (err instanceof UnifiAuthError) {
-				this.log.error('Authentication failed during device discovery: ' + err.message)
+				this.log.error(`Authentication failed during device discovery: ${err.message}`)
 			} else {
-				this.log.error('Unexpected error during authentication: ' + (err as Error).message)
+				this.log.error(`Unexpected error during authentication: ${err instanceof Error ? err.message : String(err)}`)
 			}
 			return
 		}
@@ -178,15 +177,15 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 					}
 				} else if (isIncluded && !isExcluded) {
 					// If the accessory is new, included, and not excluded, register it as a new accessory.
-					createAndRegisterAccessory(this, accessPoint, uuid);
+					createAndRegisterAccessory(this, accessPoint, uuid)
 				}
 			}
-		} catch (error) {
-			if (error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
-				this.log.error(`Device discovery failed: ${error.message}`)
+		} catch (err) {
+			if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
+				this.log.error(`Device discovery failed: ${err.message}`)
 			} else {
-				const axiosError = error as AxiosError
-				this.log.error(`Device discovery failed: ${axiosError.message}`)
+				const axiosError = err as AxiosError
+				this.log.error(`Device discovery failed: ${axiosError.message ?? err}`)
 			}
 		}
 	}
@@ -222,7 +221,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 				)
 			} catch (err) {
 				// If the session is expired or API structure is invalid, re-authenticate and try again
-				this.log.warn('Device cache refresh failed, attempting re-authentication...')
+				this.log.warn(`Device cache refresh failed, attempting re-authentication... Error: ${err instanceof Error ? err.message : String(err)}`)
 				await this.sessionManager.authenticate()
 				accessPoints = await getAccessPoints(
 					this.sessionManager.request.bind(this.sessionManager),
@@ -236,7 +235,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			this.log.info(`Device cache refreshed. ${accessPoints.length} devices currently available.`)
 		} catch (err) {
 			if (err instanceof UnifiAuthError) {
-				this.log.error('Device cache refresh failed: Failed to detect UniFi API structure during authentication');
+				this.log.error('Device cache refresh failed: Failed to detect UniFi API structure during authentication')
 			} else if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
 				this.log.error(`Device cache refresh failed: ${err.message}`)
 			} else if (err instanceof Error) {
@@ -280,6 +279,6 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	}
 
 	public get accessories(): PlatformAccessory[] {
-		return this._accessories;
+		return this._accessories
 	}
 }

@@ -38,7 +38,7 @@ export class SessionManager {
 	 * @throws {UnifiAuthError} If authentication or API structure detection fails.
 	 */
 	async authenticate(): Promise<void> {
-		this.log.debug('Starting authentication...')
+		this.log.debug(`Starting authentication for host "${this.host}"...`)
 		let instance: AxiosInstance
 		try {
 			instance = Axios.create({
@@ -72,10 +72,10 @@ export class SessionManager {
 				try {
 					const parsed = parseCookie(setCookie.join('; '))
 					token = parsed['TOKEN'] ?? ''
-					const decoded = jwt.decode(token) as { csrfToken?: string } | null;
-					csrfToken = decoded?.csrfToken ?? '';
+					const decoded = jwt.decode(token) as { csrfToken?: string } | null
+					csrfToken = decoded?.csrfToken ?? ''
 				} catch (err) {
-					this.log.error(`Cookie parsing or token decoding failed: ${err}`)
+					this.log.error(`Cookie parsing or token decoding failed for host "${this.host}": ${err}`)
 					throw new UnifiAuthError('UniFi OS authentication failed: Malformed cookie or token.', err)
 				}
 				if (!csrfToken) 
@@ -96,7 +96,7 @@ export class SessionManager {
 		}
 
 		this.axiosInstance = instance
-		this.log.debug(`Authentication successful. API type: ${apiType}`)
+		this.log.debug(`Authentication successful for host "${this.host}". API type: ${apiType}`)
 		await this.loadSites()
 	}
 
@@ -116,7 +116,7 @@ export class SessionManager {
 		} catch (error) {
 			const axiosError = error as AxiosError
 			if (axiosError.response?.status === 401) {
-				this.log.warn('Session expired, retrying authentication...')
+				this.log.warn(`Session expired for host "${this.host}", retrying authentication...`)
 				await this.authenticate()
 				return await this.axiosInstance(config)
 			} else if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ENOTFOUND') {
@@ -136,28 +136,33 @@ export class SessionManager {
 	 * @throws {Error} If the site list cannot be loaded.
 	 */
 	private async loadSites(): Promise<void> {
-		// Loads available sites from the controller using the correct endpoint for the detected API structure.
-		// Populates the siteMap for friendly name resolution.
 		const url = this.apiHelper.getSitesEndpoint()
-		this.siteMap.clear();
+		this.siteMap.clear()
 		try {
 			const response = await this.request({ url, method: 'get' })
 			const sites: UnifiSite[] = response?.data?.data
 			if (Array.isArray(sites)) {
 				for (const site of sites) {
-					if (site.desc) this.siteMap.set(site.desc, site.name)
-					if (site.name) this.siteMap.set(site.name, site.name)
+					if (site && typeof site === 'object') {
+						if (site.desc && site.name) {
+							this.siteMap.set(site.desc, site.name)
+							this.siteMap.set(site.name, site.name)
+						} else if (site.name) {
+							this.siteMap.set(site.name, site.name)
+						}
+						// If only desc is present, do not map it
+					}
 				}
-				this.log.debug(`Loaded sites from ${url}: ${Array.from(this.siteMap.keys()).join(', ')}`)
+				this.log.debug(`Loaded sites from ${url} for host "${this.host}": ${Array.from(this.siteMap.keys()).join(', ')}`)
 			} else {
 				throw new UnifiApiError('Unexpected site list structure', { response })
 			}
 		} catch (error) {
 			if (error instanceof UnifiApiError) {
-				this.log.error(`Failed to load site list from ${url}: ${error.message}`)
+				this.log.error(`Failed to load site list from ${url} for host "${this.host}": ${error.message}`)
 				throw error
 			} else {
-				this.log.error(`Failed to load site list from ${url}: ${error instanceof Error ? error.message : error}`)
+				this.log.error(`Failed to load site list from ${url} for host "${this.host}": ${error instanceof Error ? error.message : error}`)
 				throw new UnifiApiError('Failed to load site list', error)
 			}
 		}

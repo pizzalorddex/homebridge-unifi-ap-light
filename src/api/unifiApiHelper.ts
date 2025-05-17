@@ -38,7 +38,7 @@ export class UnifiApiHelper {
 	 */
 	async detectApiType(instance: AxiosInstance, username: string, password: string, log: Logger): Promise<UnifiApiType> {
 		try {
-			log.debug('Trying UniFi OS authentication...')
+			log.debug('Trying UniFi OS authentication... [endpoint: /api/auth/login]')
 			await instance.post('/api/auth/login', { username, password, rememberMe: true })
 			this.apiType = UnifiApiType.UnifiOS
 			log.debug('Detected UniFi OS API structure.')
@@ -46,13 +46,13 @@ export class UnifiApiHelper {
 		} catch {
 			// Try self-hosted
 			try {
-				log.debug('Trying self-hosted authentication...')
+				log.debug('Trying self-hosted authentication... [endpoint: /api/login]')
 				await instance.post('/api/login', { username, password })
 				this.apiType = UnifiApiType.SelfHosted
 				log.debug('Detected self-hosted API structure.')
 				return this.apiType
 			} catch (err) {
-				log.error('Failed to detect UniFi API structure:', err)
+				log.error(`Failed to detect UniFi API structure (tried /api/auth/login and /api/login): ${err}`)
 				throw new Error('Unable to detect UniFi API structure.')
 			}
 		}

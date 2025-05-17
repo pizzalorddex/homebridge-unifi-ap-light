@@ -1,6 +1,6 @@
 import { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { Logger } from 'homebridge'
-import { UnifiDevice, UnifiApiResponse } from './models/unifiTypes.js'
+import { UnifiDevice, UnifiApiResponse, UnifiApiError } from './models/unifiTypes.js'
 import { UnifiApiHelper } from './api/unifiApiHelper.js'
 
 /**
@@ -68,29 +68,33 @@ export async function getAccessPoints(
 						...device,
 						site, // tag the device with its site name
 					}))
-				log.debug(`Found ${devices.length} devices in site "${site}" via ${endpoint}`)
+				log.debug(`Found ${devices.length} devices in site "${site}" via endpoint "${endpoint}"`)
 				allDevices.push(...devices)
 				siteSuccess = true
 			} else {
-				throw new Error('API returned no data or unexpected data structure')
+				throw new UnifiApiError('Unexpected device list structure', { response })
 			}
 		} catch (error) {
+			if (error instanceof UnifiApiError) {
+				log.error(`Failed to load device list from site "${site}" at endpoint "${endpoint}": ${error.message}`)
+				continue
+			}
 			const axiosError = error as AxiosError
 			const status = axiosError.response?.status
 			// Special handling for NoSiteContext error
 			const data = axiosError.response?.data as { meta?: { msg?: string } }
 			if (data?.meta?.msg === 'api.err.NoSiteContext') {
-				log.error(`Site "${site}" is not recognized by the controller (api.err.NoSiteContext).`)
+				log.error(`Site "${site}" is not recognized by the controller (api.err.NoSiteContext) [endpoint: ${endpoint}]`)
 				continue
 			}
 			if (status === 404) {
 				log.warn(`Endpoint not found: ${endpoint} for site "${site}" (API structure may be incorrect or changed).`)
 				continue
 			}
-			log.warn(`Error fetching devices from site "${site}" at ${endpoint}: ${axiosError.message}`)
+			log.warn(`Error fetching devices from site "${site}" at endpoint "${endpoint}": ${axiosError.message}`)
 		}
 		if (!siteSuccess) {
-			log.warn(`No valid device endpoint succeeded for site "${site}".`)
+			log.warn(`No valid device endpoint succeeded for site "${site}" [endpoint: ${endpoint}]`)
 		}
 	}
 	if (allDevices.length === 0) {

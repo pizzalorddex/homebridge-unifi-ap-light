@@ -35,7 +35,7 @@ export class UniFiAP {
 				fallbackSite = resolved || configuredSites[0] || 'default'
 			}
 			this.platform.log.warn(
-				`Patching missing site for ${this.accessPoint.name}: using "${fallbackSite}"`
+				`Patching missing site for ${this.accessPoint.name} (${this.accessPoint._id}): using "${fallbackSite}"`
 			)
 			this.accessPoint.site = fallbackSite
 			this.accessory.context.accessPoint = this.accessPoint
@@ -51,7 +51,7 @@ export class UniFiAP {
 				.setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.accessPoint.version)
 		} else {
 			// Handle the case where the service is not available
-			this.platform.log.warn('Accessory Information Service not found.')
+			this.platform.log.warn(`Accessory Information Service not found for ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}"`)
 		}
 
 		// Create or retrieve the LightBulb service.
@@ -89,7 +89,7 @@ export class UniFiAP {
 				data: data,
 			})
 			if (response.status === 200) {
-				this.platform.log.debug(`Successfully set LED state for ${this.accessPoint.name} to ${value ? 'on' : 'off'}.`)
+				this.platform.log.debug(`Successfully set LED state for ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}" to ${value ? 'on' : 'off'}.`)
 				// Update cache
 				if (isUdmDevice && this.accessPoint.ledSettings) {
 					this.accessPoint.ledSettings.enabled = Boolean(value)
@@ -102,14 +102,14 @@ export class UniFiAP {
 				])
 				return
 			} else {
-				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: Unexpected response status ${response.status}`)
+				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}": Unexpected response status ${response.status}`)
 			}
 		} catch (error) {
 			if (error instanceof UnifiAuthError || error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
-				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: ${error.message}`)
+				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}": ${error.message}`)
 			} else {
 				const axiosError = error as AxiosError
-				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name}: ${axiosError.message}`)
+				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}": ${axiosError.message}`)
 			}
 			// Set accessory to Not Responding using Error('Not Responding')
 			this.service.updateCharacteristic(
@@ -128,7 +128,7 @@ export class UniFiAP {
 		try {
 			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 			if (!cached) {
-				this.platform.log.error(`Device ${this.accessPoint.name} not found in cache.`)
+				this.platform.log.error(`Device ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}" not found in cache.`)
 				this.service.updateCharacteristic(
 					this.platform.Characteristic.On,
 					new Error('Not Responding')
@@ -138,10 +138,10 @@ export class UniFiAP {
 			if (cached.type === 'udm') {
 				if (cached.ledSettings && typeof cached.ledSettings.enabled !== 'undefined') {
 					const isOn = cached.ledSettings.enabled
-					this.platform.log.debug(`Retrieved LED state for ${cached.name}: ${isOn ? 'on' : 'off'}`)
+					this.platform.log.debug(`Retrieved LED state for ${cached.name} (${cached._id}) site="${cached.site}": ${isOn ? 'on' : 'off'}`)
 					return isOn
 				} else {
-					this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${cached.name}`)
+					this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${cached.name} (${cached._id}) site="${cached.site}"`)
 					this.service.updateCharacteristic(
 						this.platform.Characteristic.On,
 						new Error('Not Responding')
@@ -150,14 +150,14 @@ export class UniFiAP {
 				}
 			} else {
 				const isOn = cached.led_override === 'on'
-				this.platform.log.debug(`Retrieved LED state for ${cached.name}: ${isOn ? 'on' : 'off'}`)
+				this.platform.log.debug(`Retrieved LED state for ${cached.name} (${cached._id}) site="${cached.site}": ${isOn ? 'on' : 'off'}`)
 				return isOn
 			}
 		} catch (error) {
 			if (error instanceof UnifiAuthError || error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
-				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name}: ${error.message}`)
+				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}": ${error.message}`)
 			} else {
-				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name}: ${error}`)
+				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name} (${this.accessPoint._id}) site="${this.accessPoint.site}": ${error}`)
 			}
 			this.service.updateCharacteristic(
 				this.platform.Characteristic.On,
