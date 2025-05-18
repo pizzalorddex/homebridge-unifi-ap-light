@@ -297,4 +297,21 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	public get accessories(): PlatformAccessory[] {
 		return this._accessories
 	}
+
+	/**
+	 * Immediately re-authenticates and refreshes the device cache.
+	 * Can be called by accessories after a network/API error for fast recovery.
+	 *
+	 * @returns {Promise<void>}
+	 */
+	public async forceImmediateCacheRefresh(): Promise<void> {
+		this.log.info('Immediate cache refresh requested (triggered by accessory error).')
+		try {
+			await this.sessionManager.authenticate()
+			await this.refreshDeviceCache()
+			this.log.info('Immediate cache refresh completed successfully.')
+		} catch (err) {
+			this.log.error('Immediate cache refresh failed:', err)
+		}
+	}
 }

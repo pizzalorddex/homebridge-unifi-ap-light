@@ -34,6 +34,7 @@ const mockPlatform = {
 	Characteristic: { Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision', Name: 'Name', On: 'On' },
 	api: { hap: { uuid: { generate: vi.fn((id) => `uuid-${id}`) } } },
 	log: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+	forceImmediateCacheRefresh: vi.fn().mockResolvedValue(undefined), // <-- add this stub
 }
 
 describe('UniFiAP Accessory', () => {
@@ -225,55 +226,49 @@ describe('UniFiAP Accessory', () => {
 
 		it('getOn: should log error and set Not Responding if device not in cache', async () => {
 			sharedMockCache.getDeviceById.mockImplementation(() => { return undefined as any })
-			const result = await accessory.getOn()
+			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('not found in cache'))
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-			expect(result).toBe(false)
 		})
 
 		it('getOn: should log error and set Not Responding if ledSettings.enabled is undefined', async () => {
 			const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: {} }
 			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			const result = await accessory.getOn()
+			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('enabled'))
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-			expect(result).toBe(false)
 		})
 
 		it('getOn: should handle UnifiAuthError and set Not Responding', async () => {
 			class UnifiAuthError extends Error { constructor(msg: string) { super(msg) } }
 			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiAuthError('auth error') })
-			const result = await accessory.getOn()
+			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('auth error'))
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-			expect(result).toBe(false)
 		})
 
 		it('getOn: should handle UnifiApiError and set Not Responding', async () => {
 			class UnifiApiError extends Error { constructor(msg: string) { super(msg) } }
 			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiApiError('api error') })
-			const result = await accessory.getOn()
+			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('api error'))
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-			expect(result).toBe(false)
 		})
 
 		it('getOn: should handle UnifiNetworkError and set Not Responding', async () => {
 			class UnifiNetworkError extends Error { constructor(msg: string) { super(msg) } }
 			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiNetworkError('network error') })
-			const result = await accessory.getOn()
+			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('network error'))
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-			expect(result).toBe(false)
 		})
 
 		it('getOn: should log error and set Not Responding if udm has no ledSettings', async () => {
 			const udm = { ...mockAccessory.context.accessPoint, type: 'udm' }
 			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			const result = await accessory.getOn()
+			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('enabled'))
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-			expect(result).toBe(false)
 		})
 
 		it('getOn: should return correct value for udm with ledSettings.enabled true/false', async () => {

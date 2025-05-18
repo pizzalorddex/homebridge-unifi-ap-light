@@ -119,6 +119,8 @@ export class UniFiAP {
 			)
 			// Clear the device cache on error to prevent stale state
 			this.platform.getDeviceCache().clear()
+			// Attempt immediate re-authentication and cache refresh
+			await this.platform.forceImmediateCacheRefresh()
 			// Do not update cache on error
 		}
 	}
@@ -129,6 +131,7 @@ export class UniFiAP {
 	 * @returns {Promise<CharacteristicValue>} The current state of the accessory.
 	 */
 	async getOn(): Promise<CharacteristicValue> {
+		this.platform.log.debug(`HomeKit GET called for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site})`)
 		try {
 			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 			if (!cached) {
@@ -137,7 +140,9 @@ export class UniFiAP {
 					this.platform.Characteristic.On,
 					new Error('Not Responding')
 				)
-				return false
+				// Attempt immediate re-authentication and cache refresh
+				await this.platform.forceImmediateCacheRefresh()
+				throw new Error('Not Responding')
 			}
 			if (cached.type === 'udm') {
 				if (cached.ledSettings && typeof cached.ledSettings.enabled !== 'undefined') {
@@ -150,7 +155,7 @@ export class UniFiAP {
 						this.platform.Characteristic.On,
 						new Error('Not Responding')
 					)
-					return false
+					throw new Error('Not Responding')
 				}
 			} else {
 				const isOn = cached.led_override === 'on'
@@ -167,7 +172,9 @@ export class UniFiAP {
 				this.platform.Characteristic.On,
 				new Error('Not Responding')
 			)
-			return false
+			// Attempt immediate re-authentication and cache refresh
+			await this.platform.forceImmediateCacheRefresh()
+			throw new Error('Not Responding')
 		}
 	}
 
