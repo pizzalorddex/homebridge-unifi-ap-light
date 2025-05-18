@@ -117,6 +117,8 @@ export class UniFiAP {
 				this.platform.Characteristic.On,
 				new Error('Not Responding')
 			)
+			// Clear the device cache on error to prevent stale state
+			this.platform.getDeviceCache().clear()
 			// Do not update cache on error
 		}
 	}

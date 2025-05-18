@@ -23,6 +23,7 @@ const sharedMockCache = {
 	getDeviceById: vi.fn(() => mockAccessory.context.accessPoint),
 	getAllDevices: vi.fn(() => [mockAccessory.context.accessPoint]),
 	setDevices: vi.fn(),
+	clear: vi.fn(),
 }
 
 const mockPlatform = {
@@ -196,6 +197,14 @@ describe('UniFiAP Accessory', () => {
 			sharedMockCache.getDeviceById.mockReturnValue(udm)
 			accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory)
 			await expect(accessory.setOn(true)).resolves.not.toThrow()
+		})
+
+		it('setOn: should clear device cache on network/API error', async () => {
+			// Simulate a UnifiNetworkError
+			class UnifiNetworkError extends Error { constructor(msg: string) { super(msg) } }
+			mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiNetworkError('network error'))
+			await accessory.setOn(true)
+			expect(mockPlatform.getDeviceCache().clear).toHaveBeenCalled()
 		})
 	})
 
