@@ -1,36 +1,34 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
-import { AxiosError, AxiosResponse } from 'axios'
-import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError } from './models/unifiTypes.js'
-
-import type { UnifiAPLight } from './platform.js'
+import { AxiosError } from 'axios'
+import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError } from '../models/unifiTypes.js'
+import type { UnifiAPLight } from '../platform.js'
+import { markAccessoryNotResponding } from '../utils/errorHandler.js'
 
 /**
  * UniFiAP Homebridge Accessory
  * Represents a single UniFi AP as a HomeKit accessory, handling LED state and HomeKit interactions.
- *
- * @remarks
- * - Uses device cache for efficient state lookups.
- * - Surfaces errors to Homebridge and logs all failures.
  */
 export class UniFiAP {
-	// The underlying device object containing details like serial number and model
 	accessPoint: UnifiDevice
 	private service: Service
 
+	/**
+	 * Constructs a UniFiAP accessory, sets up context, services, and characteristics.
+	 * @param platform - The Homebridge platform instance
+	 * @param accessory - The Homebridge PlatformAccessory instance
+	 */
 	constructor(
 		private readonly platform: UnifiAPLight,
 		private readonly accessory: PlatformAccessory,
 	) {
-		// Always use the latest cached device info
 		const cached = this.platform.getDeviceCache().getDeviceById(this.accessory.context.accessPoint._id)
 		this.accessPoint = cached || this.accessory.context.accessPoint
 
-		// Fallback: Patch missing site property for cached accessories
+		// Patch missing site info if needed
 		if (!this.accessPoint.site) {
 			const configuredSites = this.platform.config.sites
 			let fallbackSite = 'default'
 			if (Array.isArray(configuredSites) && configuredSites.length === 1) {
-				// Try to resolve the internal site name if possible
 				const resolved = this.platform.sessionManager.getSiteName(configuredSites[0])
 				fallbackSite = resolved || configuredSites[0] || 'default'
 			}
@@ -41,7 +39,6 @@ export class UniFiAP {
 			this.accessory.context.accessPoint = this.accessPoint
 		}
 
-		// Initialize accessory information from the configuration.
 		const accessoryInformationService = this.accessory.getService(this.platform.Service.AccessoryInformation)
 		if (accessoryInformationService) {
 			accessoryInformationService
@@ -50,29 +47,24 @@ export class UniFiAP {
 				.setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessPoint.serial)
 				.setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.accessPoint.version)
 		} else {
-			// Handle the case where the service is not available
 			this.platform.log.warn(`Accessory Information Service not found for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site})`)
 		}
 
-		// Create or retrieve the LightBulb service.
 		this.service =
 			this.accessory.getService(this.platform.Service.Lightbulb) ||
 			this.accessory.addService(this.platform.Service.Lightbulb)
 
-		// Set default HomeKit name based on the name stored in `accessory.context` from the `discoverDevices` method.
 		this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessPoint.name)
 
-		// Register handlers for the On/Off Characteristic.
 		this.service.getCharacteristic(this.platform.Characteristic.On)
-			.onSet(this.setOn.bind(this)) // SET - bind to the `setOn` method below
-			.onGet(this.getOn.bind(this)) // GET - bind to the `getOn` method below
+			.onSet(this.setOn.bind(this))
+			.onGet(this.getOn.bind(this))
 	}
 
 	/**
 	 * Handles "SET" requests from HomeKit to change the state of the accessory.
-	 *
-	 * @param {CharacteristicValue} value The new state from HomeKit.
-	 * @returns {Promise<void>}
+	 * @param value - The new state from HomeKit.
+	 * @returns Promise<void>
 	 */
 	async setOn(value: CharacteristicValue): Promise<void> {
 		const isUdmDevice = this.accessPoint.type === 'udm'
@@ -83,7 +75,7 @@ export class UniFiAP {
 
 		const endpoint = this.platform.sessionManager.getApiHelper().getDeviceUpdateEndpoint(site, this.accessPoint._id)
 		try {
-			const response: AxiosResponse = await this.platform.sessionManager.request({
+			const response = await this.platform.sessionManager.request({
 				method: 'put',
 				url: endpoint,
 				data: data,
@@ -112,23 +104,16 @@ export class UniFiAP {
 				const axiosError = error as AxiosError
 				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): ${axiosError.message}`)
 			}
-			// Set accessory to Not Responding using Error('Not Responding')
-			this.service.updateCharacteristic(
-				this.platform.Characteristic.On,
-				new Error('Not Responding')
-			)
-			// Clear the device cache on error to prevent stale state
+			// Use centralized error handler
+			markAccessoryNotResponding(this.platform, this.accessory)
 			this.platform.getDeviceCache().clear()
-			// Attempt immediate re-authentication and cache refresh
 			await this.platform.forceImmediateCacheRefresh()
-			// Do not update cache on error
 		}
 	}
 
 	/**
 	 * Handles "GET" requests from HomeKit to retrieve the current state of the accessory.
-	 *
-	 * @returns {Promise<CharacteristicValue>} The current state of the accessory.
+	 * @returns Promise<CharacteristicValue> The current state of the accessory.
 	 */
 	async getOn(): Promise<CharacteristicValue> {
 		this.platform.log.debug(`HomeKit GET called for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site})`)
@@ -136,11 +121,7 @@ export class UniFiAP {
 			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 			if (!cached) {
 				this.platform.log.error(`Device ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}) not found in cache.`)
-				this.service.updateCharacteristic(
-					this.platform.Characteristic.On,
-					new Error('Not Responding')
-				)
-				// Attempt immediate re-authentication and cache refresh
+				markAccessoryNotResponding(this.platform, this.accessory)
 				await this.platform.forceImmediateCacheRefresh()
 				throw new Error('Not Responding')
 			}
@@ -151,10 +132,7 @@ export class UniFiAP {
 					return isOn
 				} else {
 					this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${cached.name} (${cached._id}, site: ${cached.site})`)
-					this.service.updateCharacteristic(
-						this.platform.Characteristic.On,
-						new Error('Not Responding')
-					)
+					markAccessoryNotResponding(this.platform, this.accessory)
 					throw new Error('Not Responding')
 				}
 			} else {
@@ -168,37 +146,9 @@ export class UniFiAP {
 			} else {
 				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): ${error}`)
 			}
-			this.service.updateCharacteristic(
-				this.platform.Characteristic.On,
-				new Error('Not Responding')
-			)
-			// Attempt immediate re-authentication and cache refresh
+			markAccessoryNotResponding(this.platform, this.accessory)
 			await this.platform.forceImmediateCacheRefresh()
 			throw new Error('Not Responding')
-		}
-	}
-
-	/**
-	 * Mark this accessory as Not Responding in HomeKit.
-	 * Can be called from the platform on cache/network errors.
-	 */
-	public markNotResponding(): void {
-		this.service.updateCharacteristic(
-			this.platform.Characteristic.On,
-			new Error('Not Responding')
-		)
-	}
-
-	/**
-	 * Static helper to mark a PlatformAccessory as Not Responding (for use from platform).
-	 */
-	static markNotRespondingForAccessory(platform: UnifiAPLight, accessory: PlatformAccessory): void {
-		const service = accessory.getService(platform.Service.Lightbulb)
-		if (service) {
-			service.updateCharacteristic(
-				platform.Characteristic.On,
-				new Error('Not Responding')
-			)
 		}
 	}
 }

@@ -2,7 +2,6 @@ import { vi } from 'vitest'
 import * as HAP from 'hap-nodejs'
 import * as HAPLegacyTypes from 'hap-nodejs/dist/accessories/types'
 // Import the real PlatformAccessory class from Homebridge (CJS interop)
- 
 const { PlatformAccessory } = require('homebridge/lib/platformAccessory')
 
 export function createMockApi(overrides = {}) {
@@ -47,4 +46,59 @@ export const mockLogger = {
 	error: vi.fn(),
 	warn: vi.fn(),
 	info: vi.fn(),
+}
+
+export const mockLoggerFull = {
+	debug: vi.fn(),
+	warn: vi.fn(),
+	error: vi.fn(),
+	info: vi.fn(),
+	success: vi.fn(),
+	log: vi.fn(),
+}
+
+export const mockLoggerInfoError = {
+	info: vi.fn(),
+	error: vi.fn(),
+}
+
+// --- Common Homebridge/Platform/Accessory/Service mocks for tests ---
+export const mockService = {
+	setCharacteristic: vi.fn().mockReturnThis(),
+	getCharacteristic: vi.fn().mockReturnThis(),
+	onSet: vi.fn().mockReturnThis(),
+	onGet: vi.fn().mockReturnThis(),
+	updateCharacteristic: vi.fn(),
+}
+
+export const mockAccessory = {
+	getService: vi.fn(() => mockService),
+	addService: vi.fn(() => mockService),
+	context: { accessPoint: { _id: 'ap1', name: 'Test AP', type: 'uap', site: 'default', model: 'UAP-AC', serial: '123', version: '1.0.0', led_override: 'on' } },
+	displayName: 'Test AP',
+}
+
+export const sharedMockCache = {
+	getDeviceById: vi.fn(() => mockAccessory.context.accessPoint),
+	getAllDevices: vi.fn(() => [mockAccessory.context.accessPoint]),
+	setDevices: vi.fn(),
+	clear: vi.fn(),
+}
+
+export const mockPlatform = {
+	getDeviceCache: () => sharedMockCache,
+	config: { sites: ['default'] },
+	sessionManager: { getApiHelper: () => ({ getDeviceUpdateEndpoint: vi.fn(() => '/api/s/default/rest/device/ap1') }), request: vi.fn().mockResolvedValue({ status: 200 }) },
+	Service: { AccessoryInformation: {}, Lightbulb: {} },
+	Characteristic: { Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision', Name: 'Name', On: 'On' },
+	api: { hap: { uuid: { generate: vi.fn((id) => `uuid-${id}`) } } },
+	log: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+	forceImmediateCacheRefresh: vi.fn().mockResolvedValue(undefined),
+}
+
+export const mockApi = {
+	hap: { uuid: { generate: vi.fn(id => id) }, Service: {}, Characteristic: {} },
+	on: vi.fn(),
+	registerPlatformAccessories: vi.fn(),
+	unregisterPlatformAccessories: vi.fn(),
 }

@@ -1,17 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { createAndRegisterAccessory, restoreAccessory, removeAccessory, markAccessoryNotResponding } from '../../src/accessoryFactory'
-
-let updateCharacteristic: ReturnType<typeof vi.fn>
-let service: any
-let accessory: any
-let platform: any
+import { createAndRegisterAccessory, restoreAccessory, removeAccessory } from '../../src/accessory/accessoryFactory.js'
+import { markAccessoryNotResponding } from '../../src/utils/errorHandler.js'
+import { mockService, mockAccessory, mockPlatform } from '../fixtures/homebridgeMocks'
 
 describe('accessoryFactory', () => {
 	beforeEach(() => {
-		updateCharacteristic = vi.fn()
-		service = { updateCharacteristic }
-		accessory = { getService: vi.fn(() => service) }
-		platform = { Service: { Lightbulb: {} }, Characteristic: { On: 'On' } }
+		Object.values(mockService).forEach(fn => fn.mockClear && fn.mockClear())
+		if (typeof mockAccessory.getService === 'function' && 'mockClear' in mockAccessory.getService) {
+			mockAccessory.getService.mockClear()
+		}
+		if (typeof mockAccessory.addService === 'function' && 'mockClear' in mockAccessory.addService) {
+			mockAccessory.addService.mockClear()
+		}
+		Object.values(mockPlatform.log).forEach(fn => fn.mockClear && fn.mockClear())
 	})
 
 	it('should export createAndRegisterAccessory as a function', () => {
@@ -77,12 +78,13 @@ describe('accessoryFactory', () => {
 
 	describe('markAccessoryNotResponding', () => {
 		it('should mark accessory as Not Responding', () => {
-			markAccessoryNotResponding(platform as any, accessory as any)
-			expect(updateCharacteristic).toHaveBeenCalledWith('On', new Error('Not Responding'))
+			markAccessoryNotResponding(mockPlatform as any, mockAccessory as any)
+			expect(mockService.updateCharacteristic).toHaveBeenCalledWith('On', new Error('Not Responding'))
 		})
 		it('should do nothing if Lightbulb service is missing', () => {
-			accessory.getService = vi.fn(() => undefined)
-			expect(() => markAccessoryNotResponding(platform as any, accessory as any)).not.toThrow()
+			const accessoryNoService = { ...mockAccessory, getService: vi.fn(() => undefined) }
+			const platformWithLog = { ...mockPlatform, log: { warn: vi.fn() } }
+			expect(() => markAccessoryNotResponding(platformWithLog as any, accessoryNoService as any)).not.toThrow()
 		})
 	})
 })

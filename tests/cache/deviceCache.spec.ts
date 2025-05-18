@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { DeviceCache } from '../../src/cache/deviceCache.js'
 import { UnifiDevice } from '../../src/models/unifiTypes.js'
 
@@ -84,5 +84,166 @@ describe('DeviceCache', () => {
 			cache.clear()
 			expect(cache.getAllDevices().length).toBe(0)
 		})
+	})
+
+	describe('DeviceCache.refreshDeviceCache', () => {
+		let platform: any
+		let setDevices: any
+		let log: any
+		let sessionManager: any
+		let accessories: any
+		let clear: any
+
+		function makeAccessory(name = 'Test', id = 'id') {
+			return {
+				displayName: name,
+				context: { accessPoint: { name, _id: id } },
+				getService: vi.fn().mockReturnValue({ updateCharacteristic: vi.fn() })
+			}
+		}
+
+		beforeEach(() => {
+			setDevices = vi.fn()
+			log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() }
+			sessionManager = {
+				authenticate: vi.fn().mockResolvedValue(undefined),
+				getSiteName: vi.fn(site => site === 'valid' ? 'internal' : undefined),
+				request: vi.fn(),
+				getApiHelper: vi.fn(() => ({
+					getDeviceListEndpoint: vi.fn(() => '/api/s/default/stat/device'),
+				})),
+			}
+			accessories = [makeAccessory('A', 'a'), makeAccessory('B', 'b')]
+			platform = {
+				config: { sites: ['valid'] },
+				log,
+				Service: { Lightbulb: 'Lightbulb' },
+				Characteristic: { On: 'On' },
+				sessionManager,
+				getDeviceCache: () => ({ setDevices, clear: vi.fn() }),
+				accessories,
+			}
+		})
+
+		it('logs error and returns if no valid sites', async () => {
+			platform.config.sites = ['invalid']
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(log.error).toHaveBeenCalledWith('No valid sites resolved. Aborting device cache refresh.')
+			expect(setDevices).not.toHaveBeenCalled()
+		})
+
+		it('sets devices and logs info on success', async () => {
+			const getAccessPoints = vi.fn().mockResolvedValue([{ _id: 'a' }])
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(getAccessPoints).toHaveBeenCalled()
+			expect(setDevices).toHaveBeenCalledWith([{ _id: 'a' }])
+			expect(log.info).toHaveBeenCalledWith('Device cache refreshed. 1 devices currently available.')
+			vi.resetModules()
+		})
+
+		it('re-authenticates if getAccessPoints throws, then succeeds', async () => {
+			const getAccessPoints = vi.fn()
+			getAccessPoints
+				.mockImplementationOnce(() => { throw new Error('fail') })
+				.mockResolvedValueOnce([{ _id: 'b' }])
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(sessionManager.authenticate).toHaveBeenCalled()
+			expect(setDevices).toHaveBeenCalledWith([{ _id: 'b' }])
+			vi.resetModules()
+		})
+
+		it('handles UnifiAuthError in catch', async () => {
+			const UnifiAuthError = class extends Error {}
+			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError, UnifiApiError: class {}, UnifiNetworkError: class {} }))
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new UnifiAuthError('authfail') }) }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: Failed to detect UniFi API structure during authentication')
+			vi.resetModules()
+		})
+
+		it('handles UnifiApiError in catch', async () => {
+			const UnifiApiError = class extends Error {}
+			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiApiError, UnifiAuthError: class {}, UnifiNetworkError: class {} }))
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new UnifiApiError('apifail') }) }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: apifail')
+			vi.resetModules()
+		})
+
+		it('handles UnifiNetworkError in catch', async () => {
+			const UnifiNetworkError = class extends Error {}
+			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiNetworkError, UnifiAuthError: class {}, UnifiApiError: class {} }))
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new UnifiNetworkError('netfail') }) }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: netfail')
+			vi.resetModules()
+		})
+
+		it('handles generic Error in catch', async () => {
+			const Dummy = class extends Error {}
+			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new Error('fail') }) }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: fail')
+			vi.resetModules()
+		})
+
+		it('handles string error in catch', async () => {
+			const Dummy = class extends Error {}
+			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw 'failstr' }) }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed:', 'failstr')
+			vi.resetModules()
+		})
+
+		it('handles unknown error in catch', async () => {
+			const unknownErr = { foo: 1 }
+			const Dummy = class extends Error {}
+			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw unknownErr }) }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed:', unknownErr)
+			vi.resetModules()
+		})
+
+		it('marks all accessories as Not Responding and clears cache on error', async () => {
+			const markAccessoryNotResponding = vi.fn()
+			clear = vi.fn()
+			platform.getDeviceCache = () => ({ setDevices, clear })
+			const Dummy = class extends Error {}
+			const getAccessPoints = vi.fn(() => { throw new Error('fail') })
+			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding }))
+			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
+			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
+			await DeviceCache.refreshDeviceCache(platform)
+			for (const accessory of accessories) {
+				expect(markAccessoryNotResponding).toHaveBeenCalledWith(platform, accessory)
+			}
+			expect(clear).toHaveBeenCalled()
+			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: fail')
+			vi.resetModules()
+		})
+	})
+
+	afterEach(() => {
+		vi.unstubAllGlobals()
 	})
 })

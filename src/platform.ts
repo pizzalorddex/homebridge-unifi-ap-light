@@ -1,37 +1,45 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge'
-import { AxiosError } from 'axios'
-import { DeviceCache } from './cache/deviceCache.js'
-import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError, UnifiConfigError, UnifiAPLightConfig } from './models/unifiTypes.js'
-import { markAccessoryNotResponding, restoreAccessory, removeAccessory, createAndRegisterAccessory } from './accessoryFactory.js'
-
-import { SessionManager } from './sessionManager.js'
-import { getAccessPoints } from './unifi.js'
-
 /**
- * UnifiAPLight Homebridge Platform
- * Handles device discovery, registration, and periodic device cache refresh for UniFi APs.
- *
- * @remarks
- * - Device discovery and cache refresh are robust against network/API errors.
- * - All errors are logged and surfaced to Homebridge where possible.
- * - Configuration is validated at runtime for required fields and values.
+ * Homebridge Platform Plugin for UniFi AP Lights
+ * Implements the DynamicPlatformPlugin interface for Homebridge.
+ * Handles configuration, device discovery, accessory management, and cache refresh logic.
  */
+import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge'
+import { DeviceCache } from './cache/deviceCache.js'
+import { UnifiConfigError, UnifiAPLightConfig } from './models/unifiTypes.js'
+import { SessionManager } from './sessionManager.js'
+import { RecoveryManager } from './platform/recoveryManager.js'
+import { discoverDevices } from './platform/discovery.js'
+
 export class UnifiAPLight implements DynamicPlatformPlugin {
+	/** Parsed and validated config for the platform */
 	public config: UnifiAPLightConfig
+	/** Handles authentication and API requests to UniFi controller */
 	public sessionManager: SessionManager
+	/** Homebridge Service and Characteristic references */
 	public readonly Service: typeof Service = this.api.hap.Service
 	public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic
+	/** List of currently managed accessories */
 	private _accessories: PlatformAccessory[]
+	/** Device cache for discovered UniFi APs */
 	private deviceCache: DeviceCache = new DeviceCache()
-	private refreshIntervalMs: number // Set refresh interval from config or default to 10 minutes
+	/** Device cache refresh interval in ms */
+	private refreshIntervalMs: number
+	/** Timer for periodic device cache refresh */
 	private refreshTimer: NodeJS.Timeout | null = null
+	/** Handles recovery and forced cache refresh */
+	private recoveryManager: RecoveryManager
 
+	/**
+	 * Constructs the platform, validates config, and sets up event listeners.
+	 * @param log Homebridge logger
+	 * @param config Platform config
+	 * @param api Homebridge API
+	 */
 	constructor(
 		public readonly log: Logger,
 		config: PlatformConfig,
 		public readonly api: API,
 	) {
-		// Cast config to UnifiAPLightConfig before validation
 		const typedConfig = config as UnifiAPLightConfig
 		this.config = typedConfig
 		try {
@@ -45,29 +53,33 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 			}
 		}
 		this.log.debug(`Initializing UniFi AP Light platform: ${this.config.name} (host: ${this.config.host})`)
-
 		this.sessionManager = new SessionManager(this.config.host, this.config.username, this.config.password, this.log)
-
+		// Set refresh interval (default 10 min)
 		this.refreshIntervalMs = (typeof this.config.refreshIntervalMinutes === 'number' && this.config.refreshIntervalMinutes > 0
 			? this.config.refreshIntervalMinutes
 			: 10) * 60 * 1000
-
 		this._accessories = []
-
+		this.recoveryManager = new RecoveryManager(
+			this.sessionManager,
+			() => DeviceCache.refreshDeviceCache(this),
+			this.log
+		)
+		// Start discovery after Homebridge launch
 		this.api.on('didFinishLaunching', this.handleDidFinishLaunching.bind(this))
 	}
 
+	/**
+	 * Handles Homebridge didFinishLaunching event: starts device discovery and cache refresh timer.
+	 */
 	private handleDidFinishLaunching() {
 		this.log.debug('Finished loading, starting device discovery...')
-		this.discoverDevices()
+		discoverDevices(this)
 		this.startDeviceCacheRefreshTimer()
 	}
 
 	/**
-	 * Validates the platform configuration at runtime.
-	 *
-	 * @param {UnifiAPLightConfig} config The configuration object to validate.
-	 * @throws {UnifiConfigError} If the config is invalid.
+	 * Validates the user config and throws UnifiConfigError on invalid config.
+	 * @param config The config to validate
 	 */
 	private validateConfig(config: UnifiAPLightConfig) {
 		if (!config.host || typeof config.host !== 'string') {
@@ -94,10 +106,8 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	}
 
 	/**
-	 * Restore cached accessories from disk at startup.
-	 *
-	 * @param {PlatformAccessory} accessory The accessory to restore.
-	 * @returns {void}
+	 * Called by Homebridge to restore cached accessories on startup.
+	 * @param accessory The cached accessory
 	 */
 	configureAccessory(accessory: PlatformAccessory): void {
 		this.log.info(`Loading accessory from cache: ${accessory.displayName} (id: ${accessory.context.accessPoint?._id}, site: ${accessory.context.accessPoint?.site ?? 'unknown'})`)
@@ -105,213 +115,50 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	}
 
 	/**
-	 * Discovers and registers new devices as HomeKit accessories based on the UniFi controller data.
-	 *
-	 * @returns {Promise<void>}
+	 * Returns the list of currently managed accessories.
 	 */
-	async discoverDevices(): Promise<void> {
-		try {
-			await this.sessionManager.authenticate()
-		} catch (err) {
-			if (err instanceof UnifiAuthError) {
-				this.log.error(`Authentication failed during device discovery: ${err.message}`)
-			} else {
-				this.log.error(`Unexpected error during authentication: ${err instanceof Error ? err.message : String(err)}`)
-			}
-			// Mark all accessories as Not Responding and clear cache
-			for (const accessory of this._accessories) {
-				markAccessoryNotResponding(this, accessory)
-			}
-			this.deviceCache.clear()
-			return
-		}
-
-		try {
-			// Determine target sites: use provided list or fallback to ['default']
-			const siteInput = this.config.sites?.length ? this.config.sites : ['default']
-
-			// Resolve friendly site names (desc) to internal UniFi site names
-			const resolvedSites: string[] = []
-			for (const site of siteInput) {
-				const internal = this.sessionManager.getSiteName(site)
-				if (internal) {
-					resolvedSites.push(internal)
-				} else {
-					this.log.warn(`Site "${site}" is not recognized by the UniFi controller.`)
-				}
-			}
-
-			if (!resolvedSites.length) {
-				this.log.error('No valid sites resolved. Aborting discovery.')
-				return
-			}
-
-			// Fetch all devices once, store in cache
-			const accessPoints: UnifiDevice[] = await getAccessPoints(
-				this.sessionManager.request.bind(this.sessionManager),
-				this.sessionManager.getApiHelper(),
-				resolvedSites,
-				this.log
-			)
-			this.deviceCache.setDevices(accessPoints)
-
-			if (!accessPoints.length) {
-				this.log.warn('No access points discovered. Check your site configuration and permissions.')
-			}
-
-			// Process each access point to determine if it should be included or excluded.
-			for (const accessPoint of accessPoints) {
-				// Generate a unique identifier for the HomeKit accessory based on the access point ID.
-				const uuid = this.api.hap.uuid.generate(accessPoint._id)
-
-				// Determine inclusion by checking against includeIds, or include all if not set.
-				const isIncluded = this.config.includeIds?.length ? this.config.includeIds.includes(accessPoint._id) : true
-				// Determine exclusion by checking against excludeIds, defaulting to false if not set.
-				const isExcluded = this.config.excludeIds?.includes(accessPoint._id) || false
-
-				// Find if there is already an accessory registered in Homebridge with the same UUID.
-				const existingAccessory = this._accessories.find(acc => acc.UUID === uuid)
-
-				if (existingAccessory) {
-					if (isIncluded && !isExcluded) {
-						// If the accessory exists and is still included, restore it from cache without re-registering.
-						restoreAccessory(this, accessPoint, existingAccessory)
-					} else if (isExcluded) {
-						// If the accessory is not included or explicitly excluded, remove it from Homebridge.
-						removeAccessory(this, existingAccessory)
-					}
-				} else if (isIncluded && !isExcluded) {
-					// If the accessory is new, included, and not excluded, register it as a new accessory.
-					createAndRegisterAccessory(this, accessPoint, uuid)
-				}
-			}
-		} catch (err) {
-			if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
-				this.log.error(`Device discovery failed: ${err.message}`)
-				// Mark all accessories as Not Responding and clear cache
-				for (const accessory of this._accessories) {
-					markAccessoryNotResponding(this, accessory)
-				}
-				this.deviceCache.clear()
-			} else {
-				const axiosError = err as AxiosError
-				this.log.error(`Device discovery failed: ${axiosError.message ?? err}`)
-				// Mark all accessories as Not Responding and clear cache
-				for (const accessory of this._accessories) {
-					markAccessoryNotResponding(this, accessory)
-				}
-				this.deviceCache.clear()
-			}
-		}
+	public get accessories(): PlatformAccessory[] {
+		return this._accessories
 	}
 
 	/**
-	 * Periodically refreshes the device cache by fetching the latest device list from the UniFi controller.
-	 *
-	 * @returns {Promise<void>}
+	 * Returns the device cache instance.
 	 */
-	private async refreshDeviceCache(): Promise<void> {
-		try {
-			// Determine which sites to refresh (use config or default)
-			const siteInput = this.config.sites?.length ? this.config.sites : ['default']
-			const resolvedSites: string[] = []
-			for (const site of siteInput) {
-				const internal = this.sessionManager.getSiteName(site)
-				if (internal) {
-					resolvedSites.push(internal)
-				}
-			}
-			if (!resolvedSites.length) {
-				this.log.error('No valid sites resolved. Aborting device cache refresh.')
-				return
-			}
-			let accessPoints: UnifiDevice[] = []
-			try {
-				// Try to fetch devices using the current session and cached API structure
-				accessPoints = await getAccessPoints(
-					this.sessionManager.request.bind(this.sessionManager),
-					this.sessionManager.getApiHelper(),
-					resolvedSites,
-					this.log
-				)
-			} catch (err) {
-				// If the session is expired or API structure is invalid, re-authenticate and try again
-				this.log.warn(`Device cache refresh failed, attempting re-authentication... Error: ${err instanceof Error ? err.message : String(err)}`)
-				await this.sessionManager.authenticate()
-				accessPoints = await getAccessPoints(
-					this.sessionManager.request.bind(this.sessionManager),
-					this.sessionManager.getApiHelper(),
-					resolvedSites,
-					this.log
-				)
-			}
-			// Update the device cache with the latest device list
-			this.deviceCache.setDevices(accessPoints)
-			this.log.info(`Device cache refreshed. ${accessPoints.length} devices currently available.`)
-		} catch (err) {
-			if (err instanceof UnifiAuthError) {
-				this.log.error('Device cache refresh failed: Failed to detect UniFi API structure during authentication')
-			} else if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
-				this.log.error(`Device cache refresh failed: ${err.message}`)
-			} else if (err instanceof Error) {
-				this.log.error(`Device cache refresh failed: ${err.message}`)
-			} else if (typeof err === 'string') {
-				// Handles thrown string errors
-				this.log.error('Device cache refresh failed:', err)
-			} else {
-				// Handles thrown non-Error objects
-				this.log.error('Device cache refresh failed:', err)
-			}
-			// Mark all accessories as Not Responding in HomeKit and clear cache
-			for (const accessory of this._accessories) {
-				markAccessoryNotResponding(this, accessory)
-			}
-			this.deviceCache.clear()
-		}
+	getDeviceCache(): DeviceCache {
+		return this.deviceCache
 	}
 
 	/**
-	 * Starts the timer for periodic device cache refresh.
-	 *
-	 * @returns {void}
+	 * Forces an immediate device cache refresh (used by recovery manager).
+	 */
+	public async forceImmediateCacheRefresh(): Promise<void> {
+		return this.recoveryManager.forceImmediateCacheRefresh()
+	}
+
+	/**
+	 * Public wrapper for device discovery (for tests/backward compatibility)
+	 */
+	public async discoverDevices(): Promise<void> {
+		return discoverDevices(this)
+	}
+
+	/**
+	 * Public wrapper for device cache refresh (for tests/backward compatibility)
+	 */
+	public async refreshDeviceCache(): Promise<void> {
+		return DeviceCache.refreshDeviceCache(this)
+	}
+
+	/**
+	 * Starts or restarts the periodic device cache refresh timer.
 	 */
 	private startDeviceCacheRefreshTimer(): void {
 		if (this.refreshTimer) {
 			clearInterval(this.refreshTimer)
 		}
 		this.refreshTimer = setInterval(() => {
-			this.refreshDeviceCache()
+			DeviceCache.refreshDeviceCache(this)
 		}, this.refreshIntervalMs)
 		this.log.info(`Device cache refresh timer started (every ${this.refreshIntervalMs / 60000} minutes).`)
-	}
-
-	/**
-	 * Returns the current device cache instance.
-	 *
-	 * @returns {DeviceCache}
-	 */
-	getDeviceCache(): DeviceCache {
-		return this.deviceCache
-	}
-
-	public get accessories(): PlatformAccessory[] {
-		return this._accessories
-	}
-
-	/**
-	 * Immediately re-authenticates and refreshes the device cache.
-	 * Can be called by accessories after a network/API error for fast recovery.
-	 *
-	 * @returns {Promise<void>}
-	 */
-	public async forceImmediateCacheRefresh(): Promise<void> {
-		this.log.info('Immediate cache refresh requested (triggered by accessory error).')
-		try {
-			await this.sessionManager.authenticate()
-			await this.refreshDeviceCache()
-			this.log.info('Immediate cache refresh completed successfully.')
-		} catch (err) {
-			this.log.error('Immediate cache refresh failed:', err)
-		}
 	}
 }

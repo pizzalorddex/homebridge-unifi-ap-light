@@ -51,4 +51,67 @@ export class DeviceCache {
 	clear(): void {
 		this.devices.clear()
 	}
+
+	/**
+	 * Refresh the device cache from the UniFi controller.
+	 *
+	 * @param platform - The Homebridge platform instance (for config, session, logging, and accessories)
+	 * @returns Promise<void>
+	 */
+	static async refreshDeviceCache(platform: any): Promise<void> {
+		try {
+			const siteInput = platform.config.sites?.length ? platform.config.sites : ['default']
+			const resolvedSites: string[] = []
+			for (const site of siteInput) {
+				const internal = platform.sessionManager.getSiteName(site)
+				if (internal) {
+					resolvedSites.push(internal)
+				}
+			}
+			if (!resolvedSites.length) {
+				platform.log.error('No valid sites resolved. Aborting device cache refresh.')
+				return
+			}
+			let accessPoints = []
+			try {
+				const { getAccessPoints } = await import('../unifi.js')
+				accessPoints = await getAccessPoints(
+					platform.sessionManager.request.bind(platform.sessionManager),
+					platform.sessionManager.getApiHelper(),
+					resolvedSites,
+					platform.log
+				)
+			} catch (err) {
+				platform.log.warn(`Device cache refresh failed, attempting re-authentication... Error: ${err instanceof Error ? err.message : String(err)}`)
+				await platform.sessionManager.authenticate()
+				const { getAccessPoints } = await import('../unifi.js')
+				accessPoints = await getAccessPoints(
+					platform.sessionManager.request.bind(platform.sessionManager),
+					platform.sessionManager.getApiHelper(),
+					resolvedSites,
+					platform.log
+				)
+			}
+			platform.getDeviceCache().setDevices(accessPoints)
+			platform.log.info(`Device cache refreshed. ${accessPoints.length} devices currently available.`)
+		} catch (err) {
+			const { UnifiAuthError, UnifiApiError, UnifiNetworkError } = await import('../models/unifiTypes.js')
+			if (err instanceof UnifiAuthError) {
+				platform.log.error('Device cache refresh failed: Failed to detect UniFi API structure during authentication')
+			} else if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
+				platform.log.error(`Device cache refresh failed: ${err.message}`)
+			} else if (err instanceof Error) {
+				platform.log.error(`Device cache refresh failed: ${err.message}`)
+			} else if (typeof err === 'string') {
+				platform.log.error('Device cache refresh failed:', err)
+			} else {
+				platform.log.error('Device cache refresh failed:', err)
+			}
+			const { markAccessoryNotResponding } = await import('../utils/errorHandler.js')
+			for (const accessory of platform.accessories) {
+				markAccessoryNotResponding(platform, accessory)
+			}
+			platform.getDeviceCache().clear()
+		}
+	}
 }

@@ -4,6 +4,7 @@ import { Logger } from 'homebridge'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Axios from 'axios'
 import { UnifiApiType } from '../../src/api/unifiApiHelper.js'
+import { mockLogger } from '../fixtures/homebridgeMocks'
 
 // Helper for AxiosResponse mock
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
@@ -18,7 +19,8 @@ const mockAxiosResponse = (data: any): AxiosResponse => ({
 describe('SessionManager', () => {
 	let log: Logger
 	beforeEach(() => {
-		log = { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() } as any
+		log = mockLogger as any
+		Object.values(mockLogger).forEach(fn => fn.mockClear && fn.mockClear())
 	})
 
 	describe('Construction & API Helper', () => {

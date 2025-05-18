@@ -1,15 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { getAccessPoint, getAccessPoints } from '../../src/unifi.js'
 import { UnifiApiHelper, UnifiApiType } from '../../src/api/unifiApiHelper.js'
+import { mockLoggerFull } from '../fixtures/homebridgeMocks'
 
-const log = {
-	debug: vi.fn(),
-	warn: vi.fn(),
-	error: vi.fn(),
-	info: vi.fn(),
-	success: vi.fn(),
-	log: vi.fn(),
-}
+const log = mockLoggerFull
 const apiHelper = new UnifiApiHelper()
 apiHelper.setApiType(UnifiApiType.SelfHosted)
 
