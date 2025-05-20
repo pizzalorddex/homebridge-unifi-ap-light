@@ -1,8 +1,7 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
-import { AxiosError } from 'axios'
-import { UnifiDevice, UnifiApiError, UnifiAuthError, UnifiNetworkError } from '../models/unifiTypes.js'
+import { UnifiDevice } from '../models/unifiTypes.js'
+import { markAccessoryNotResponding, errorHandler } from '../utils/errorHandler.js'
 import type { UnifiAPLight } from '../platform.js'
-import { markAccessoryNotResponding } from '../utils/errorHandler.js'
 
 /**
  * UniFiAP Homebridge Accessory
@@ -89,7 +88,7 @@ export class UniFiAP {
 					this.accessPoint.led_override = value ? 'on' : 'off'
 				}
 				this.platform.getDeviceCache().setDevices([
-					...this.platform.getDeviceCache().getAllDevices().filter(d => d._id !== this.accessPoint._id),
+					...this.platform.getDeviceCache().getAllDevices().filter((d: UnifiDevice) => d._id !== this.accessPoint._id),
 					this.accessPoint
 				])
 				return
@@ -98,13 +97,14 @@ export class UniFiAP {
 				// Do not update cache on error
 			}
 		} catch (error) {
-			if (error instanceof UnifiAuthError || error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
-				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): ${error.message}`)
-			} else {
-				const axiosError = error as AxiosError
-				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): ${axiosError.message}`)
-			}
-			// Use centralized error handler
+			errorHandler(
+				this.platform.log,
+				error,
+				{
+					site: this.accessPoint.site,
+					endpoint: `setOn for ${this.accessPoint.name} (${this.accessPoint._id})`
+				}
+			)
 			markAccessoryNotResponding(this.platform, this.accessory)
 			this.platform.getDeviceCache().clear()
 			await this.platform.forceImmediateCacheRefresh()
@@ -141,11 +141,14 @@ export class UniFiAP {
 				return isOn
 			}
 		} catch (error) {
-			if (error instanceof UnifiAuthError || error instanceof UnifiApiError || error instanceof UnifiNetworkError) {
-				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): ${error.message}`)
-			} else {
-				this.platform.log.error(`Failed to retrieve LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): ${error}`)
-			}
+			errorHandler(
+				this.platform.log,
+				error,
+				{
+					site: this.accessPoint.site,
+					endpoint: `getOn for ${this.accessPoint.name} (${this.accessPoint._id})`
+				}
+			)
 			markAccessoryNotResponding(this.platform, this.accessory)
 			await this.platform.forceImmediateCacheRefresh()
 			throw new Error('Not Responding')

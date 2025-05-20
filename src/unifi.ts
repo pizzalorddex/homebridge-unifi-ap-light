@@ -2,6 +2,8 @@ import { AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { Logger } from 'homebridge'
 import { UnifiDevice, UnifiApiResponse, UnifiApiError } from './models/unifiTypes.js'
 import { UnifiApiHelper } from './api/unifiApiHelper.js'
+import { filterRelevantAps } from './utils/apFilter.js'
+import { errorHandler } from './utils/errorHandler.js'
 
 /**
  * Retrieves a specific UniFi AP by its ID.
@@ -58,16 +60,10 @@ export async function getAccessPoints(
 			// Fetch devices for this site using the resolved endpoint
 			const response = await request({ url: endpoint, method: 'get' })
 			if (isUnifiApiResponse<UnifiDevice>(response.data)) {
-				// Filter and return only devices of type 'uap' and 'udm'
-				const devices = response.data.data
-					.filter((device: UnifiDevice) =>
-						device.type === 'uap' ||
-            (device.type === 'udm' && (device.model === 'UDM' || device.model === 'UDR'))
-					)
-					.map((device: UnifiDevice) => ({
-						...device,
-						site, // tag the device with its site name
-					}))
+				const devices = response.data.data.map((device: UnifiDevice) => ({
+					...device,
+					site, // tag the device with its site name
+				}))
 				log.debug(`Found ${devices.length} devices in site "${site}" via endpoint "${endpoint}"`)
 				allDevices.push(...devices)
 				siteSuccess = true
@@ -76,7 +72,7 @@ export async function getAccessPoints(
 			}
 		} catch (error) {
 			if (error instanceof UnifiApiError) {
-				log.error(`Failed to load device list from site "${site}" at endpoint "${endpoint}": ${error.message}`)
+				errorHandler(log, error, { site, endpoint })
 				continue
 			}
 			const axiosError = error as AxiosError
@@ -84,21 +80,52 @@ export async function getAccessPoints(
 			// Special handling for NoSiteContext error
 			const data = axiosError.response?.data as { meta?: { msg?: string } }
 			if (data?.meta?.msg === 'api.err.NoSiteContext') {
-				log.error(`Site "${site}" is not recognized by the controller (api.err.NoSiteContext) [endpoint: ${endpoint}]`)
+				log.error(`api.err.NoSiteContext: Site "${site}" is not recognized by the controller [endpoint: ${endpoint}]`)
 				continue
 			}
 			if (status === 404) {
 				log.warn(`Endpoint not found: ${endpoint} for site "${site}" (API structure may be incorrect or changed).`)
 				continue
 			}
-			log.warn(`Error fetching devices from site "${site}" at endpoint "${endpoint}": ${axiosError.message}`)
+			errorHandler(log, error, { site, endpoint })
 		}
 		if (!siteSuccess) {
-			log.warn(`No valid device endpoint succeeded for site "${site}" [endpoint: ${endpoint}]`)
+			log.warn(`Error fetching devices from site "${site}" [endpoint: ${endpoint}]`)
 		}
 	}
-	if (allDevices.length === 0) {
+	if (filterRelevantAps(allDevices).length === 0) {
 		throw new Error('Failed to fetch any access points from any site.')
 	}
-	return allDevices
+	// Apply the strict AP filter here for compatibility
+	return filterRelevantAps(allDevices)
+}
+
+/**
+ * Fetches a single UniFi device by MAC address from the controller.
+ * Uses UnifiApiHelper to resolve the correct endpoint for the site and API type.
+ *
+ * @param {string} mac The MAC address of the device.
+ * @param {Function} requestFunction The function to execute the API request.
+ * @param {UnifiApiHelper} apiHelper The API helper for endpoint resolution.
+ * @param {string} site The site name to query.
+ * @param {Logger} log Homebridge logger instance.
+ * @returns {Promise<UnifiDevice | undefined>} The device object, or undefined if not found.
+ */
+export async function getDeviceByMac(
+	mac: string,
+	requestFunction: (config: AxiosRequestConfig) => Promise<AxiosResponse<UnifiApiResponse<UnifiDevice>>>,
+	apiHelper: UnifiApiHelper,
+	site: string,
+	log: Logger
+): Promise<UnifiDevice | undefined> {
+	const endpoint = apiHelper.getSingleDeviceEndpoint(site, mac)
+	try {
+		const response = await requestFunction({ url: endpoint, method: 'get' })
+		if (isUnifiApiResponse<UnifiDevice>(response.data) && response.data.data.length > 0) {
+			return response.data.data[0]
+		}
+	} catch (err) {
+		log.error(`Failed to fetch device by MAC (${mac}) from site ${site}: ${err}`)
+	}
+	return undefined
 }

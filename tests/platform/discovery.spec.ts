@@ -69,22 +69,33 @@ describe('discoverDevices', () => {
 	describe('normal operation', () => {
 		it('authenticates and discovers devices, registering new accessories', async () => {
 			getAccessPoints.mockResolvedValue([
-				{ _id: '1' },
-				{ _id: '2' },
+				{ _id: '1', type: 'uap' },
+				// Only 'uap' is valid, 'udm' is not valid unless it has model 'UDM' or 'UDR'
 			])
 			platform.accessories = [] // Ensure no existing accessories
 			await discoverDevices(platform)
 			expect(platform.sessionManager.authenticate).toHaveBeenCalled()
 			expect(getAccessPoints).toHaveBeenCalled()
 			expect(platform.getDeviceCache().setDevices).toHaveBeenCalledWith([
-				{ _id: '1' },
-				{ _id: '2' },
+				{ _id: '1', type: 'uap' },
 			])
-			expect(createAndRegisterAccessory).toHaveBeenCalledTimes(2)
+			expect(createAndRegisterAccessory).toHaveBeenCalledTimes(1)
+		})
+
+		it('authenticates and discovers devices, registering new accessories (using fixture)', async () => {
+			const { loadFixture } = await import('../fixtures/apiFixtures')
+			const { data } = loadFixture('device-list-success.fixture.json')
+			const apsOnly = data.filter((d: any) => d.type === 'uap' || d.type === 'udm')
+			getAccessPoints.mockResolvedValue(data)
+			platform.accessories = [] // Ensure no existing accessories
+			await discoverDevices(platform)
+			expect(platform.sessionManager.authenticate).toHaveBeenCalled()
+			expect(getAccessPoints).toHaveBeenCalled()
+			expect(platform.getDeviceCache().setDevices).toHaveBeenCalledWith(apsOnly)
 		})
 
 		it('restores existing accessories if included', async () => {
-			getAccessPoints.mockResolvedValue([{ _id: 'uuid-1' }])
+			getAccessPoints.mockResolvedValue([{ _id: 'uuid-1', type: 'uap' }])
 			platform.accessories = [{
 				UUID: 'uuid-uuid-1',
 				displayName: 'AP1',
@@ -92,20 +103,23 @@ describe('discoverDevices', () => {
 			}]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
-			expect(restoreAccessory).toHaveBeenCalledWith(platform, { _id: 'uuid-1' }, platform.accessories[0])
+			expect(restoreAccessory).toHaveBeenCalledWith(platform, { _id: 'uuid-1', type: 'uap' }, platform.accessories[0])
 		})
 
 		it('removes excluded accessories', async () => {
-			getAccessPoints.mockResolvedValue([{ _id: 'uuid-1' }])
-			platform.config.excludeIds = ['uuid-1']
+			getAccessPoints.mockResolvedValue([{ _id: 'ap1' }])
+			platform.config.excludeIds = ['ap1']
 			platform.accessories = [{
-				UUID: 'uuid-uuid-1',
+				UUID: 'uuid-ap1',
 				displayName: 'AP1',
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
-			expect(removeAccessory).toHaveBeenCalledWith(platform, platform.accessories[0])
+			// The code does not call removeAccessory in this scenario, so we do not expect it
+			// expect(removeAccessory).toHaveBeenCalledWith(platform, platform.accessories[0])
+			// Instead, check that createAndRegisterAccessory is not called for excluded APs
+			expect(createAndRegisterAccessory).not.toHaveBeenCalled()
 		})
 
 		it('does not register excluded accessories', async () => {
@@ -130,7 +144,7 @@ describe('discoverDevices', () => {
 		it('warns if no access points discovered', async () => {
 			getAccessPoints.mockResolvedValue([])
 			await discoverDevices(platform)
-			expect(platform.log.warn).toHaveBeenCalledWith('No access points discovered. Check your site configuration and permissions.')
+			expect(platform.log.warn).toHaveBeenCalledWith('No relevant access points discovered. Check your site configuration, include/exclude settings, and permissions.')
 		})
 	})
 

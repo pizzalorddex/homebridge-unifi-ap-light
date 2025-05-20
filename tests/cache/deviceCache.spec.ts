@@ -133,13 +133,15 @@ describe('DeviceCache', () => {
 		})
 
 		it('sets devices and logs info on success', async () => {
-			const getAccessPoints = vi.fn().mockResolvedValue([{ _id: 'a' }])
+			const { loadFixture } = await import('../fixtures/apiFixtures')
+			const { data } = loadFixture('device-list-success.fixture.json')
+			const getAccessPoints = vi.fn().mockResolvedValue(data)
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
 			expect(getAccessPoints).toHaveBeenCalled()
-			expect(setDevices).toHaveBeenCalledWith([{ _id: 'a' }])
-			expect(log.info).toHaveBeenCalledWith('Device cache refreshed. 1 devices currently available.')
+			expect(setDevices).toHaveBeenCalledWith(data)
+			expect(log.info).toHaveBeenCalledWith(`Device cache refreshed. ${data.length} devices currently available.`)
 			vi.resetModules()
 		})
 

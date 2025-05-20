@@ -3,8 +3,8 @@ import Axios, { AxiosInstance, AxiosError, AxiosRequestConfig, AxiosResponse } f
 import jwt from 'jsonwebtoken'
 import https from 'https'
 import { parse as parseCookie } from 'cookie'
-import { UnifiApiHelper, UnifiApiType } from './api/unifiApiHelper.js'
-import { UnifiSite, UnifiApiError, UnifiAuthError, UnifiNetworkError } from './models/unifiTypes.js'
+import { UnifiApiHelper, UnifiApiType } from '../api/unifiApiHelper.js'
+import { UnifiSite, UnifiApiError, UnifiAuthError, UnifiNetworkError } from '../models/unifiTypes.js'
 
 /**
  * SessionManager
@@ -48,6 +48,7 @@ export class SessionManager {
 		} catch (err) {
 			throw new UnifiAuthError('Failed to create Axios instance for authentication', err)
 		}
+
 		let apiType = this.apiHelper.getApiType()
 		try {
 			if (!apiType) {

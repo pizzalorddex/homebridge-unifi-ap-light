@@ -139,4 +139,30 @@ describe('UnifiApiHelper', () => {
 			expect(helper.getSitesEndpoint()).toBe('/proxy/network/api/self/sites')
 		})
 	})
+
+	describe('getSingleDeviceEndpoint', () => {
+		it('should resolve single device endpoint for self-hosted', () => {
+			apiHelper.setApiType(UnifiApiType.SelfHosted)
+			expect(apiHelper.getSingleDeviceEndpoint('default', 'aa:bb:cc:dd:ee:ff')).toBe('/api/s/default/stat/device/aa:bb:cc:dd:ee:ff')
+		})
+		it('should resolve single device endpoint for UniFi OS', () => {
+			apiHelper.setApiType(UnifiApiType.UnifiOS)
+			expect(apiHelper.getSingleDeviceEndpoint('default', 'aa:bb:cc:dd:ee:ff')).toBe('/proxy/network/api/s/default/stat/device/aa:bb:cc:dd:ee:ff')
+		})
+	})
+
+	describe('isDeviceReady', () => {
+		it('should return true if last_seen and uptime are present', () => {
+			const device = { last_seen: 123, uptime: 456 }
+			expect(UnifiApiHelper.isDeviceReady(device)).toBe(true)
+		})
+		it('should return true if state is 1', () => {
+			const device = { state: 1 }
+			expect(UnifiApiHelper.isDeviceReady(device)).toBe(true)
+		})
+		it('should return false if neither last_seen/uptime nor state=1', () => {
+			const device = { state: 7 }
+			expect(UnifiApiHelper.isDeviceReady(device)).toBe(false)
+		})
+	})
 })

@@ -1,10 +1,10 @@
-import { SessionManager } from '../../src/sessionManager.js'
+import { SessionManager } from '../../src/utils/sessionManager.js'
 import { UnifiApiError, UnifiAuthError, UnifiNetworkError } from '../../src/models/unifiTypes.js'
 import { Logger } from 'homebridge'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Axios from 'axios'
 import { UnifiApiType } from '../../src/api/unifiApiHelper.js'
-import { mockLogger } from '../fixtures/homebridgeMocks'
+import { mockLogger } from '../fixtures/homebridgeMocks.js'
 
 // Helper for AxiosResponse mock
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'

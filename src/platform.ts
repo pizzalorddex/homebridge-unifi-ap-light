@@ -6,7 +6,7 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge'
 import { DeviceCache } from './cache/deviceCache.js'
 import { UnifiConfigError, UnifiAPLightConfig } from './models/unifiTypes.js'
-import { SessionManager } from './sessionManager.js'
+import { SessionManager } from './utils/sessionManager.js'
 import { RecoveryManager } from './platform/recoveryManager.js'
 import { discoverDevices } from './platform/discovery.js'
 

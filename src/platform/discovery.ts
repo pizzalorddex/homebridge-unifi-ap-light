@@ -4,6 +4,7 @@ import { UnifiAuthError, UnifiApiError, UnifiNetworkError } from '../models/unif
 import { getAccessPoints } from '../unifi.js'
 import { markAccessoryNotResponding } from '../utils/errorHandler.js'
 import { restoreAccessory, removeAccessory, createAndRegisterAccessory } from '../accessory/accessoryFactory.js'
+import { filterRelevantAps } from '../utils/apFilter.js'
 
 /**
  * Discovers UniFi devices and manages Homebridge accessories accordingly.
@@ -59,17 +60,23 @@ export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
 			resolvedSites,
 			platform.log
 		)
+
+		// Filter APs by include/exclude config
+		const includeIds = platform.config.includeIds
+		const excludeIds = platform.config.excludeIds
+		const relevantAps = filterRelevantAps(accessPoints, includeIds, excludeIds)
+
 		// Update the device cache
-		platform.getDeviceCache().setDevices(accessPoints)
-		if (!accessPoints.length) {
-			platform.log.warn('No access points discovered. Check your site configuration and permissions.')
+		platform.getDeviceCache().setDevices(relevantAps)
+		if (!relevantAps.length) {
+			platform.log.warn('No relevant access points discovered. Check your site configuration, include/exclude settings, and permissions.')
 		}
 
 		// Register, restore, or remove Homebridge accessories based on discovered devices
-		for (const accessPoint of accessPoints) {
+		for (const accessPoint of relevantAps) {
 			const uuid = platform.api.hap.uuid.generate(accessPoint._id)
-			const isIncluded = platform.config.includeIds?.length ? platform.config.includeIds.includes(accessPoint._id) : true
-			const isExcluded = platform.config.excludeIds?.includes(accessPoint._id) || false
+			const isIncluded = includeIds?.length ? includeIds.includes(accessPoint._id) : true
+			const isExcluded = excludeIds?.includes(accessPoint._id) || false
 			const existingAccessory = platform.accessories.find(acc => acc.UUID === uuid)
 			if (existingAccessory) {
 				if (isIncluded && !isExcluded) {

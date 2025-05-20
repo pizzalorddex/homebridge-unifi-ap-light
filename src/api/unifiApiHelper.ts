@@ -118,4 +118,39 @@ export class UnifiApiHelper {
 			return '/api/self/sites'
 		}
 	}
+
+	/**
+	 * Get the correct endpoint for fetching a single device by MAC address in a site.
+	 *
+	 * @param {string} site The site name.
+	 * @param {string} mac The device's MAC address.
+	 * @returns {string} The API endpoint for single device info.
+	 */
+	getSingleDeviceEndpoint(site: string, mac: string): string {
+		if (this.apiType === UnifiApiType.UnifiOS) {
+			return `/proxy/network/api/s/${site}/stat/device/${mac}`
+		} else {
+			return `/api/s/${site}/stat/device/${mac}`
+		}
+	}
+
+	/**
+	 * Determines if a UniFi device is truly ready (controller and device are fully online).
+	 * @param device The device object returned from the UniFi API.
+	 * @returns boolean True if the device is ready, false otherwise.
+	 */
+	static isDeviceReady(device: any): boolean {
+		// last_seen and uptime must be positive numbers to be considered ready
+		if (typeof device.last_seen === 'number' && typeof device.uptime === 'number') {
+			if (device.last_seen > 0 && device.uptime > 0) {
+				return true
+			}
+			return false
+		}
+		// Optionally, check state === 1 (but this may not be universal)
+		if (device.state === 1) {
+			return true
+		}
+		return false
+	}
 }

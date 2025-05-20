@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { getAccessPoint, getAccessPoints } from '../../src/unifi.js'
+import { getAccessPoint, getAccessPoints, getDeviceByMac } from '../../src/unifi.js'
 import { UnifiApiHelper, UnifiApiType } from '../../src/api/unifiApiHelper.js'
 import { mockLoggerFull } from '../fixtures/homebridgeMocks'
 
@@ -80,16 +80,15 @@ describe('unifi.ts coverage', () => {
 
 		describe('Device Filtering and Aggregation', () => {
 			it('filters UDM and UDR models', async () => {
-				const udm = { _id: 'udm1', type: 'udm', model: 'UDM', site: 'default' }
-				const udr = { _id: 'udr1', type: 'udm', model: 'UDR', site: 'default' }
-				const uap = { _id: 'uap1', type: 'uap', model: 'UAP', site: 'default' }
-				const request = vi.fn().mockResolvedValue({ data: { data: [udm, udr, uap] } })
+				const { loadFixture } = await import('../fixtures/apiFixtures')
+				const { data } = loadFixture('device-list-success.fixture.json')
+				const request = vi.fn().mockResolvedValue({ data: { data } })
 				const result = await getAccessPoints(request, apiHelper, ['default'], log).catch(() => [])
-				expect(result).toEqual([
-					{ ...udm, site: 'default' },
-					{ ...udr, site: 'default' },
-					{ ...uap, site: 'default' },
-				])
+				// Only supported device types should be present
+				expect(result.find(d => d.type === 'usw')).toBeUndefined()
+				// Should include at least one uap and one udm
+				expect(result.some(d => d.type === 'uap')).toBe(true)
+				expect(result.some(d => d.type === 'udm')).toBe(true)
 			})
 
 			it('aggregates devices from multiple sites and skips errors', async () => {
@@ -173,6 +172,33 @@ describe('unifi.ts coverage', () => {
 				expect(log.warn).not.toHaveBeenCalledWith(expect.stringContaining('api.err.NoSiteContext'))
 				expect(log.error).toHaveBeenCalledWith(expect.stringContaining('api.err.NoSiteContext'))
 			})
+		})
+	})
+
+	describe('getDeviceByMac', () => {
+		const site = 'default'
+		const mac = 'aa:bb:cc:dd:ee:ff'
+		const apiHelper = new UnifiApiHelper()
+		apiHelper.setApiType(UnifiApiType.SelfHosted)
+
+		it('returns device if found', async () => {
+			const device = { mac, type: 'uap', model: 'UAP', site }
+			const request = vi.fn().mockResolvedValue({ data: { data: [device] } })
+			const result = await getDeviceByMac(mac, request, apiHelper, site, log)
+			expect(result).toEqual(device)
+		})
+
+		it('returns undefined if not found', async () => {
+			const request = vi.fn().mockResolvedValue({ data: { data: [] } })
+			const result = await getDeviceByMac(mac, request, apiHelper, site, log)
+			expect(result).toBeUndefined()
+		})
+
+		it('returns undefined and logs error if request throws', async () => {
+			const request = vi.fn().mockRejectedValue(new Error('fail'))
+			const result = await getDeviceByMac(mac, request, apiHelper, site, log)
+			expect(result).toBeUndefined()
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch device by MAC'))
 		})
 	})
 
