@@ -9,9 +9,13 @@ const createAndRegisterAccessory = vi.fn()
 vi.mock('../../src/unifi', () => ({
 	getAccessPoints: (...args: any[]) => getAccessPoints(...args)
 }))
-vi.mock('../../src/utils/errorHandler', () => ({
-	markAccessoryNotResponding: (...args: any[]) => markAccessoryNotResponding(...args)
-}))
+vi.mock('../../src/utils/errorHandler', async () => {
+	const actual = await import('../../src/utils/errorHandler')
+	return {
+		...actual,
+		markAccessoryNotResponding: (...args) => markAccessoryNotResponding(...args),
+	}
+})
 vi.mock('../../src/accessory/accessoryFactory', () => ({
 	restoreAccessory: (...args: any[]) => restoreAccessory(...args),
 	removeAccessory: (...args: any[]) => removeAccessory(...args),
@@ -31,16 +35,25 @@ describe('discoverDevices', () => {
 	beforeEach(async () => {
 		setDevices.mockClear()
 		clear.mockClear()
+		removeAccessory.mockClear()
+		removeAccessory.mockImplementation((platformArg, accessoryArg) => {
+			const idx = platformArg.accessories.findIndex((acc: any) => acc.UUID === accessoryArg.UUID)
+			if (idx !== -1) {
+				platformArg.accessories.splice(idx, 1)
+			}
+		})
 		const accessories = [
 			{
 				UUID: 'uuid-1',
 				displayName: 'AP1',
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+				context: { accessPoint: { _id: 'uuid-1' } },
 			},
 			{
 				UUID: 'uuid-2',
 				displayName: 'AP2',
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+				context: { accessPoint: { _id: 'uuid-2' } },
 			},
 		]
 
@@ -113,13 +126,11 @@ describe('discoverDevices', () => {
 				UUID: 'uuid-ap1',
 				displayName: 'AP1',
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+				context: { accessPoint: { _id: 'ap1' } },
 			}]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
-			// The code does not call removeAccessory in this scenario, so we do not expect it
-			// expect(removeAccessory).toHaveBeenCalledWith(platform, platform.accessories[0])
-			// Instead, check that createAndRegisterAccessory is not called for excluded APs
-			expect(createAndRegisterAccessory).not.toHaveBeenCalled()
+			expect(removeAccessory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ UUID: 'uuid-ap1' }))
 		})
 
 		it('does not register excluded accessories', async () => {
@@ -159,7 +170,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Authentication failed during device discovery: fail')
+			expect(platform.log.error).toHaveBeenCalledWith('Authentication error [endpoint: authentication (device discovery)]: fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -172,7 +183,20 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Unexpected error during authentication: fail')
+			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: authentication (device discovery)]: fail')
+			expect(markAccessoryNotResponding).toHaveBeenCalled()
+			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
+		})
+
+		it('handles authentication failure with a string error (String(err) branch)', async () => {
+			platform.sessionManager.authenticate = vi.fn().mockRejectedValue('authfailstr')
+			platform.accessories = [{
+				UUID: 'uuid-err',
+				displayName: 'ErrorAP',
+				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+			}]
+			await discoverDevices(platform)
+			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: authentication (device discovery)]: authfailstr')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -187,7 +211,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Device discovery failed: api fail')
+			expect(platform.log.error).toHaveBeenCalledWith('API error [endpoint: device discovery]: api fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -202,7 +226,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Device discovery failed: net fail')
+			expect(platform.log.error).toHaveBeenCalledWith('Network error [endpoint: device discovery]: net fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -215,7 +239,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Device discovery failed: fail')
+			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: device discovery]: fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -228,9 +252,134 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Device discovery failed: failstr')
+			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: device discovery]: failstr')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
+		})
+	})
+
+	describe('branch/edge cases', () => {
+		it('falls back to ["default"] if config.sites is missing', async () => {
+			delete platform.config.sites
+			getAccessPoints.mockResolvedValue([{ _id: '1', type: 'uap' }])
+			platform.accessories = []
+			await discoverDevices(platform)
+			expect(platform.sessionManager.authenticate).toHaveBeenCalled()
+			expect(getAccessPoints).toHaveBeenCalled()
+			expect(platform.getDeviceCache().setDevices).toHaveBeenCalledWith([{ _id: '1', type: 'uap' }])
+		})
+
+		it('falls back to ["default"] if config.sites is empty array', async () => {
+			platform.config.sites = []
+			getAccessPoints.mockResolvedValue([{ _id: '1', type: 'uap' }])
+			platform.accessories = []
+			await discoverDevices(platform)
+			expect(platform.sessionManager.authenticate).toHaveBeenCalled()
+			expect(getAccessPoints).toHaveBeenCalled()
+			expect(platform.getDeviceCache().setDevices).toHaveBeenCalledWith([{ _id: '1', type: 'uap' }])
+		})
+
+		it('removes excluded accessory if present', async () => {
+			getAccessPoints.mockResolvedValue([{ _id: 'ap1', type: 'uap' }])
+			platform.config.excludeIds = ['ap1']
+			platform.config.includeIds = undefined // fallback: isIncluded = true
+			platform.accessories = [{
+				UUID: 'uuid-ap1',
+				displayName: 'AP1',
+				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+				context: { accessPoint: { _id: 'ap1' } },
+			}]
+			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
+			await discoverDevices(platform)
+			expect(removeAccessory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ UUID: 'uuid-ap1' }))
+		})
+
+		it('registers only included accessories when includeIds is set', async () => {
+			getAccessPoints.mockResolvedValue([
+				{ _id: 'ap1', type: 'uap' },
+				{ _id: 'ap2', type: 'uap' },
+			])
+			platform.config.includeIds = ['ap2']
+			platform.config.excludeIds = []
+			platform.accessories = []
+			await discoverDevices(platform)
+			expect(createAndRegisterAccessory).toHaveBeenCalledTimes(1)
+			expect(createAndRegisterAccessory).toHaveBeenCalledWith(platform, { _id: 'ap2', type: 'uap' }, 'uuid-ap2')
+		})
+	})
+
+	describe('accessory handling branches', () => {
+		it('removes an accessory if it is excluded and already exists (else if isExcluded branch)', async () => {
+			getAccessPoints.mockResolvedValue([{ _id: 'apX', type: 'uap' }])
+			platform.config.includeIds = undefined // fallback: isIncluded = true
+			platform.config.excludeIds = ['apX']
+			platform.accessories = [{
+				UUID: 'uuid-apX',
+				displayName: 'APX',
+				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+				context: { accessPoint: { _id: 'apX' } },
+			}]
+			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
+			await discoverDevices(platform)
+			expect(removeAccessory).toHaveBeenCalledWith(platform, expect.objectContaining({ UUID: 'uuid-apX' }))
+			expect(createAndRegisterAccessory).not.toHaveBeenCalled()
+			expect(restoreAccessory).not.toHaveBeenCalled()
+		})
+
+		it('creates a new accessory if it is included and not excluded, and does not already exist (else if isIncluded && !isExcluded branch)', async () => {
+			getAccessPoints.mockResolvedValue([{ _id: 'apY', type: 'uap' }])
+			platform.config.includeIds = ['apY']
+			platform.config.excludeIds = []
+			platform.accessories = [] // No existing accessory
+			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
+			await discoverDevices(platform)
+			expect(createAndRegisterAccessory).toHaveBeenCalledWith(platform, { _id: 'apY', type: 'uap' }, 'uuid-apY')
+			expect(removeAccessory).not.toHaveBeenCalled()
+			expect(restoreAccessory).not.toHaveBeenCalled()
+		})
+
+		it('removes an accessory in the cleanup step if it is not in includeIds', async () => {
+			getAccessPoints.mockResolvedValue([{ _id: 'apZ', type: 'uap' }])
+			platform.config.includeIds = ['apZ']
+			platform.config.excludeIds = []
+			platform.accessories = [
+				{
+					UUID: 'uuid-apZ',
+					displayName: 'APZ',
+					getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+					context: { accessPoint: { _id: 'apZ' } },
+				},
+				{
+					UUID: 'uuid-apW',
+					displayName: 'APW',
+					getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+					context: { accessPoint: { _id: 'apW' } },
+				},
+			]
+			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
+			await discoverDevices(platform)
+			// apW is not in includeIds, so should be removed in cleanup
+			expect(removeAccessory).toHaveBeenCalledWith(platform, expect.objectContaining({ UUID: 'uuid-apW' }))
+			// apZ should not be removed
+			expect(removeAccessory).not.toHaveBeenCalledWith(platform, expect.objectContaining({ UUID: 'uuid-apZ' }))
+		})
+
+		it('removes accessory in cleanup if it exists but is neither included nor excluded (else branch)', async () => {
+			getAccessPoints.mockResolvedValue([{ _id: 'apN', type: 'uap' }])
+			platform.config.includeIds = ['something-else'] // apN is not included
+			platform.config.excludeIds = ['something-else'] // apN is not excluded
+			platform.accessories = [{
+				UUID: 'uuid-apN',
+				displayName: 'APN',
+				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
+				context: { accessPoint: { _id: 'apN' } },
+			}]
+			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
+			await discoverDevices(platform)
+			expect(removeAccessory).toHaveBeenCalledTimes(1)
+			expect(removeAccessory).toHaveBeenCalledWith(platform, expect.objectContaining({ UUID: 'uuid-apN' }))
+			expect(restoreAccessory).not.toHaveBeenCalled()
+			expect(createAndRegisterAccessory).not.toHaveBeenCalled()
 		})
 	})
 })

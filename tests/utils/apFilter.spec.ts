@@ -69,4 +69,61 @@ describe('filterRelevantAps', () => {
 		expect(result.every(ap => ap.type === 'uap' || ap.type === 'udm')).toBe(true)
 		expect(result.map(ap => ap._id)).toEqual(expectedIds)
 	})
+
+	describe('type/model filtering', () => {
+		it('includes only uap and udm with model UDM/UDR', () => {
+			const devices = [
+				{ _id: '1', type: 'uap', model: 'U7' }, // include
+				{ _id: '2', type: 'udm', model: 'UDM' }, // include
+				{ _id: '3', type: 'udm', model: 'UDR' }, // include
+				{ _id: '4', type: 'udm', model: 'Dream Machine' }, // exclude
+				{ _id: '5', type: 'usw', model: 'Switch' }, // exclude
+				{ _id: '6', type: 'ugw', model: 'Gateway' }, // exclude
+				{ _id: '7', type: 'uap' }, // include
+				{ _id: '8', type: 'udm' }, // exclude (model missing)
+				{ _id: '9', model: 'UDM' }, // exclude (type missing)
+				{ _id: '10' }, // exclude (type/model missing)
+			]
+			const result = filterRelevantAps(devices as any)
+			const expectedIds = ['1', '2', '3', '7']
+			expect(result.map(d => d._id)).toEqual(expectedIds)
+		})
+
+		it('handles device with missing _id', () => {
+			const devices = [
+				{ type: 'uap', model: 'U7' },
+				{ _id: '2', type: 'uap', model: 'U7' },
+			]
+			const result = filterRelevantAps(devices as any)
+			// Should include both, but only one has _id
+			expect(result.length).toBe(2)
+			// Filtering with includeIds should only match the one with _id
+			const filtered = filterRelevantAps(devices as any, ['2'])
+			expect(filtered.length).toBe(1)
+			expect(filtered[0]._id).toBe('2')
+		})
+	})
+
+	describe('includeIds/excludeIds edge cases', () => {
+		const devices = [
+			{ _id: '1', type: 'uap', model: 'U7' },
+			{ _id: '2', type: 'uap', model: 'U7' },
+		]
+		it('handles includeIds = null', () => {
+			const result = filterRelevantAps(devices as any, null as any)
+			expect(result.length).toBe(2)
+		})
+		it('handles excludeIds = null', () => {
+			const result = filterRelevantAps(devices as any, undefined, null as any)
+			expect(result.length).toBe(2)
+		})
+		it('handles includeIds = undefined', () => {
+			const result = filterRelevantAps(devices as any, undefined)
+			expect(result.length).toBe(2)
+		})
+		it('handles excludeIds = undefined', () => {
+			const result = filterRelevantAps(devices as any, undefined, undefined)
+			expect(result.length).toBe(2)
+		})
+	})
 })

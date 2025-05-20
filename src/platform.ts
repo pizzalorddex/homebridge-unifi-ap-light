@@ -9,6 +9,7 @@ import { UnifiConfigError, UnifiAPLightConfig } from './models/unifiTypes.js'
 import { SessionManager } from './utils/sessionManager.js'
 import { RecoveryManager } from './platform/recoveryManager.js'
 import { discoverDevices } from './platform/discovery.js'
+import { errorHandler } from './utils/errorHandler.js'
 
 export class UnifiAPLight implements DynamicPlatformPlugin {
 	/** Parsed and validated config for the platform */
@@ -45,12 +46,8 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 		try {
 			this.validateConfig(typedConfig)
 		} catch (err) {
-			if (err instanceof UnifiConfigError) {
-				this.log.error(err.message)
-				throw err
-			} else {
-				throw err
-			}
+			errorHandler(this.log, err)
+			throw err
 		}
 		this.log.debug(`Initializing UniFi AP Light platform: ${this.config.name} (host: ${this.config.host})`)
 		this.sessionManager = new SessionManager(this.config.host, this.config.username, this.config.password, this.log)
@@ -110,7 +107,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 	 * @param accessory The cached accessory
 	 */
 	configureAccessory(accessory: PlatformAccessory): void {
-		this.log.info(`Loading accessory from cache: ${accessory.displayName} (id: ${accessory.context.accessPoint?._id}, site: ${accessory.context.accessPoint?.site ?? 'unknown'})`)
+		this.log.info(`[Cache Restore] Registered cached accessory with Homebridge: ${accessory.displayName} (id: ${accessory.context.accessPoint?._id}, site: ${accessory.context.accessPoint?.site ?? 'unknown'})`)
 		this._accessories.push(accessory)
 	}
 

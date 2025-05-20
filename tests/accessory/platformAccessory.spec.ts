@@ -45,6 +45,29 @@ describe('UniFiAP Accessory', () => {
 			expect(logSpy.warn).toHaveBeenCalledWith(expect.stringContaining('Patching missing site'))
 		})
 
+		it('should patch missing site and fallback to "default" if no site is resolved or configured', () => {
+			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
+			const noSiteDevice = { ...mockAccessory.context.accessPoint, site: undefined }
+			const noSiteAccessory = {
+				...mockAccessory,
+				context: { accessPoint: { ...noSiteDevice } },
+			}
+			const singleSiteConfig = {
+				...mockPlatform,
+				config: { sites: [''] }, // falsy site
+				sessionManager: { ...mockPlatform.sessionManager, getSiteName: vi.fn(() => undefined) },
+				log: logSpy,
+				getDeviceCache: () => ({
+					getDeviceById: vi.fn(() => noSiteDevice),
+					getAllDevices: vi.fn(() => [noSiteDevice]),
+					setDevices: vi.fn(),
+				}),
+			}
+			const instance = new UniFiAP(singleSiteConfig as any as UnifiAPLight, noSiteAccessory as any as PlatformAccessory)
+			expect(instance.accessPoint.site).toBe('default')
+			expect(logSpy.warn).toHaveBeenCalledWith(expect.stringContaining('Patching missing site'))
+		})
+
 		it('should use context accessPoint if device not found in cache (constructor)', () => {
 			const contextDevice = { ...mockAccessory.context.accessPoint, name: 'Context AP', _id: 'context1' }
 			const contextAccessory = { ...mockAccessory, context: { accessPoint: contextDevice } }

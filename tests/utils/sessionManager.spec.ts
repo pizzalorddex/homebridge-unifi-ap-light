@@ -445,13 +445,13 @@ describe('SessionManager', () => {
 			vi.spyOn(session, 'request').mockRejectedValue(err)
 			await expect(session['loadSites']()).rejects.toBe(err)
 			// Update error log assertions for new message format
-			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to load site list from /api/self/sites: fail'))
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('API error [endpoint: /api/self/sites]: fail'))
 		})
 		it('should log and wrap non-UnifiApiError in loadSites', async () => {
 			const session = new SessionManager('host', 'user', 'pass', log)
 			vi.spyOn(session, 'request').mockRejectedValue(new Error('fail'))
 			await expect(session['loadSites']()).rejects.toBeInstanceOf(UnifiApiError)
-			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to load site list from /api/self/sites: fail'))
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Error [endpoint: /api/self/sites]: fail'))
 		})
 		it('should warn on unknown site in getSiteName', () => {
 			const session = new SessionManager('host', 'user', 'pass', log)
@@ -535,6 +535,97 @@ describe('SessionManager', () => {
 			expect(log.debug).toHaveBeenCalledWith(expect.stringContaining('Loaded sites'))
 			expect(log.debug).toHaveBeenCalledWith(expect.stringContaining('site1'))
 			expect(log.debug).toHaveBeenCalledWith(expect.stringContaining('site2'))
+		})
+	})
+
+	describe('Utility Methods', () => {
+		it('getApiHelper returns the apiHelper instance', () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			expect(session.getApiHelper()).toBeDefined()
+		})
+
+		it('getSiteName returns undefined and logs for unknown site', () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			const spy = vi.spyOn(log, 'warn')
+			expect(session.getSiteName('notfound')).toBeUndefined()
+			expect(spy).toHaveBeenCalledWith(expect.stringContaining('Configured site "notfound" not recognized'))
+		})
+
+		it('getSiteName returns correct mapping', () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			;(session as any).siteMap.set('foo', 'bar')
+			expect(session.getSiteName('foo')).toBe('bar')
+		})
+
+		it('getAvailableSitePairs returns expected pairs', () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			;(session as any).siteMap.set('desc', 'site1')
+			;(session as any).siteMap.set('site1', 'site1')
+			;(session as any).siteMap.set('desc2', 'site2')
+			;(session as any).siteMap.set('site2', 'site2')
+			expect(session.getAvailableSitePairs()).toEqual(expect.arrayContaining(['desc (site1)', 'desc2 (site2)']))
+		})
+
+		it('getAvailableSitePairs returns empty for only self-mapping', () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			;(session as any).siteMap.set('site1', 'site1')
+			;(session as any).siteMap.set('site2', 'site2')
+			expect(session.getAvailableSitePairs()).toEqual([])
+		})
+	})
+
+	describe('loadSites edge cases', () => {
+		it('ignores site objects with no desc and no name', async () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			const sites = [ { desc: 'desc1', name: 'site1' }, {}, { name: 'site2' } ]
+			vi.spyOn(session, 'request').mockResolvedValue(mockAxiosResponse({ data: sites }))
+			await session['loadSites']()
+			expect((session as any).siteMap.get('desc1')).toBe('site1')
+			expect((session as any).siteMap.get('site2')).toBe('site2')
+		})
+
+		it('clears siteMap for empty array', async () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			;(session as any).siteMap.set('desc', 'site1')
+			vi.spyOn(session, 'request').mockResolvedValue(mockAxiosResponse({ data: [] }))
+			await session['loadSites']()
+			expect((session as any).siteMap.size).toBe(0)
+		})
+
+		it('throws and logs for malformed data', async () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			vi.spyOn(session, 'request').mockResolvedValue(mockAxiosResponse({ data: null }))
+			await expect(session['loadSites']()).rejects.toBeInstanceOf(UnifiApiError)
+		})
+
+		it('logs and rethrows UnifiApiError', async () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			const err = new UnifiApiError('fail')
+			vi.spyOn(session, 'request').mockRejectedValue(err)
+			await expect(session['loadSites']()).rejects.toBe(err)
+		})
+
+		it('logs and wraps non-UnifiApiError', async () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			vi.spyOn(session, 'request').mockRejectedValue('fail')
+			await expect(session['loadSites']()).rejects.toBeInstanceOf(UnifiApiError)
+		})
+	})
+
+	describe('authenticate edge cases', () => {
+		it('throws UnifiAuthError if Axios.create fails', async () => {
+			const orig = (Axios as any).create
+			;(Axios as any).create = () => { throw new Error('fail') }
+			const session = new SessionManager('host', 'user', 'pass', log)
+			await expect(session.authenticate()).rejects.toBeInstanceOf(UnifiAuthError)
+			;(Axios as any).create = orig
+		})
+
+		it('throws UnifiAuthError if detectApiType fails', async () => {
+			const session = new SessionManager('host', 'user', 'pass', log)
+			vi.spyOn(session.getApiHelper(), 'getApiType').mockReturnValue(null)
+			vi.spyOn(session.getApiHelper(), 'detectApiType').mockRejectedValue(new Error('fail'))
+			await expect(session.authenticate()).rejects.toBeInstanceOf(UnifiAuthError)
 		})
 	})
 

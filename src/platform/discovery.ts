@@ -1,8 +1,7 @@
 // Handles device discovery logic for the platform
 import type { UnifiAPLight } from '../platform.js'
-import { UnifiAuthError, UnifiApiError, UnifiNetworkError } from '../models/unifiTypes.js'
 import { getAccessPoints } from '../unifi.js'
-import { markAccessoryNotResponding } from '../utils/errorHandler.js'
+import { errorHandler, markAccessoryNotResponding } from '../utils/errorHandler.js'
 import { restoreAccessory, removeAccessory, createAndRegisterAccessory } from '../accessory/accessoryFactory.js'
 import { filterRelevantAps } from '../utils/apFilter.js'
 
@@ -23,12 +22,8 @@ export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
 		// Authenticate with the UniFi controller before discovery
 		await platform.sessionManager.authenticate()
 	} catch (err: unknown) {
-		// Handle authentication errors and mark all accessories as Not Responding
-		if (err instanceof UnifiAuthError) {
-			platform.log.error(`Authentication failed during device discovery: ${err.message}`)
-		} else {
-			platform.log.error(`Unexpected error during authentication: ${err instanceof Error ? err.message : String(err)}`)
-		}
+		// Centralized error handling for authentication errors
+		errorHandler(platform.log, err, { endpoint: 'authentication (device discovery)' })
 		for (const accessory of platform.accessories) {
 			markAccessoryNotResponding(platform, accessory)
 		}
@@ -88,21 +83,32 @@ export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
 				createAndRegisterAccessory(platform, accessPoint, uuid)
 			}
 		}
-	} catch (err: unknown) {
-		// Handle API/network errors and mark all accessories as Not Responding
-		if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
-			platform.log.error(`Device discovery failed: ${err.message}`)
-			for (const accessory of platform.accessories) {
-				markAccessoryNotResponding(platform, accessory)
+
+		// --- Cleanup step: Remove cached accessories that are now excluded or not included ---
+		// Remove excluded accessories
+		if (excludeIds && excludeIds.length > 0) {
+			for (const accessory of platform.accessories.slice()) {
+				const id = accessory.context?.accessPoint?._id
+				if (id && excludeIds.includes(id)) {
+					removeAccessory(platform, accessory)
+				}
 			}
-			platform.getDeviceCache().clear()
-		} else {
-			const axiosError = err as any
-			platform.log.error(`Device discovery failed: ${axiosError.message ?? err}`)
-			for (const accessory of platform.accessories) {
-				markAccessoryNotResponding(platform, accessory)
-			}
-			platform.getDeviceCache().clear()
 		}
+		// Remove accessories not in includeIds (if includeIds is set)
+		if (includeIds && includeIds.length > 0) {
+			for (const accessory of platform.accessories.slice()) {
+				const id = accessory.context?.accessPoint?._id
+				if (id && !includeIds.includes(id)) {
+					removeAccessory(platform, accessory)
+				}
+			}
+		}
+	} catch (err: unknown) {
+		// Centralized error handling for API/network errors
+		errorHandler(platform.log, err, { endpoint: 'device discovery' })
+		for (const accessory of platform.accessories) {
+			markAccessoryNotResponding(platform, accessory)
+		}
+		platform.getDeviceCache().clear()
 	}
 }

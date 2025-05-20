@@ -69,7 +69,7 @@ describe('UnifiAPLight Platform', () => {
 		const accessory = { displayName: 'Test', UUID: 'uuid-1', context: { accessPoint: { _id: 'ap-id', site: 'mysite' } } } as any
 		platform.configureAccessory(accessory)
 		expect(platform.accessories).toContain(accessory)
-		expect(mockLogger.info).toHaveBeenCalledWith('Loading accessory from cache: Test (id: ap-id, site: mysite)')
+		expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('[Cache Restore] Registered cached accessory with Homebridge'))
 	})
 
 	// --- Integration: handleDidFinishLaunching ---

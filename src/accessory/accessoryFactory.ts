@@ -44,7 +44,7 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
  */
 export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, existingAccessory: PlatformAccessory): void {
 	const siteInfo = accessPoint.site ? `site: ${accessPoint.site}` : ''
-	platform.log.info(`Restoring existing accessory from cache: ${existingAccessory.displayName} (${accessPoint._id} ${siteInfo})`)
+	platform.log.info(`[Discovery] Matched device to cached accessory: ${existingAccessory.displayName} (${accessPoint._id} ${siteInfo})`)
 	new UniFiAP(platform, existingAccessory)
 }
 

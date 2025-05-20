@@ -27,7 +27,7 @@ describe('accessoryFactory', () => {
 					registerPlatformAccessories: vi.fn(() => { throw new Error('register error') }),
 				},
 				accessories: [],
-				log: { info: vi.fn(), error: vi.fn() },
+				log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 				Service: { Lightbulb: {}, AccessoryInformation: {} },
 				Characteristic: { On: 'On', Name: 'Name', Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision' },
 				getDeviceCache: () => ({ getDeviceById: vi.fn(() => ({ _id: 'id', name: 'AP', site: 'default', model: 'UAP', serial: 'SN', version: '1.0.0' })) }),
@@ -39,26 +39,100 @@ describe('accessoryFactory', () => {
 			createAndRegisterAccessory(platformMock as any, accessPoint as any, uuid)
 			expect(platformMock.log.error).toHaveBeenCalledWith(expect.stringContaining('Error during registerPlatformAccessories'))
 		})
+		it('should handle accessory with no site property (siteInfo fallback)', () => {
+			const platformMock = {
+				api: {
+					platformAccessory: vi.fn((name, uuid) => ({ name, uuid, context: {}, getService: vi.fn(() => mockService), addService: vi.fn() })),
+					registerPlatformAccessories: vi.fn(),
+				},
+				accessories: [],
+				log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+				Service: { Lightbulb: {}, AccessoryInformation: {} },
+				Characteristic: { On: 'On', Name: 'Name', Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision' },
+				getDeviceCache: () => ({ getDeviceById: vi.fn(), getAllDevices: vi.fn(), setDevices: vi.fn() }),
+				config: { sites: ['default'] },
+				sessionManager: { getSiteName: vi.fn(), getApiHelper: vi.fn() },
+			}
+			const accessPoint = { name: 'AP', _id: 'id' } // no site
+			const uuid = 'uuid-1'
+			createAndRegisterAccessory(platformMock as any, accessPoint as any, uuid)
+			expect(platformMock.log.info).toHaveBeenCalledWith(expect.stringContaining('Adding new accessory: AP (id )'))
+		})
+		it('should register accessory normally and log info', () => {
+			const platformMock = {
+				api: {
+					platformAccessory: vi.fn((name, uuid) => ({ name, uuid, context: {}, getService: vi.fn(() => mockService), addService: vi.fn() })),
+					registerPlatformAccessories: vi.fn(),
+				},
+				accessories: [],
+				log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+				Service: { Lightbulb: {}, AccessoryInformation: {} },
+				Characteristic: { On: 'On', Name: 'Name', Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision' },
+				getDeviceCache: () => ({ getDeviceById: vi.fn(), getAllDevices: vi.fn(), setDevices: vi.fn() }),
+				config: { sites: ['default'] },
+				sessionManager: { getSiteName: vi.fn(), getApiHelper: vi.fn() },
+			}
+			const accessPoint = { name: 'AP', _id: 'id', site: 'default' }
+			const uuid = 'uuid-1'
+			createAndRegisterAccessory(platformMock as any, accessPoint as any, uuid)
+			expect(platformMock.log.info).toHaveBeenCalledWith(expect.stringContaining('Adding new accessory: AP (id site: default)'))
+			expect(platformMock.api.registerPlatformAccessories).toHaveBeenCalled()
+		})
 	})
-
 	describe('restoreAccessory', () => {
 		it('should call UniFiAP constructor and log info', () => {
 			const platformMock = {
-				log: { info: vi.fn() },
+				log: { info: vi.fn(), warn: vi.fn() },
 				Service: { Lightbulb: {}, AccessoryInformation: {} },
 				Characteristic: { On: 'On', Name: 'Name', Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision' },
-				getDeviceCache: vi.fn(() => ({ getDeviceById: vi.fn(() => ({ _id: 'id', name: 'AP', site: 'default' })) })),
+				getDeviceCache: vi.fn(() => ({ getDeviceById: vi.fn(() => ({ _id: 'id', name: 'AP', site: 'default' })), getAllDevices: vi.fn(() => [{ _id: 'id', name: 'AP', site: 'default' }]), setDevices: vi.fn() })),
 				config: { sites: ['default'] },
-				sessionManager: { getSiteName: vi.fn(() => 'default'), getApiHelper: vi.fn(() => ({ getDeviceUpdateEndpoint: vi.fn() })) },
+				sessionManager: { getSiteName: vi.fn(), getApiHelper: vi.fn() },
 			}
 			const accessPoint = { _id: 'id', name: 'AP', site: 'default', model: 'UAP', serial: 'SN', version: '1.0.0' }
-			const existingAccessory = { displayName: 'AP', context: { accessPoint }, getService: vi.fn(() => ({ setCharacteristic: vi.fn().mockReturnThis(), getCharacteristic: vi.fn().mockReturnThis(), onSet: vi.fn().mockReturnThis(), onGet: vi.fn().mockReturnThis(), updateCharacteristic: vi.fn() })) }
-			// Just ensure it does not throw and logs info
+			const mockService = {
+				setCharacteristic: vi.fn().mockReturnThis(),
+				getCharacteristic: vi.fn().mockReturnThis(),
+				onSet: vi.fn().mockReturnThis(),
+				onGet: vi.fn().mockReturnThis(),
+				updateCharacteristic: vi.fn()
+			}
+			const existingAccessory = {
+				displayName: 'AP',
+				context: { accessPoint },
+				getService: vi.fn(() => mockService),
+				addService: vi.fn(() => mockService)
+			}
 			expect(() => restoreAccessory(platformMock as any, accessPoint as any, existingAccessory as any)).not.toThrow()
-			expect(platformMock.log.info).toHaveBeenCalledWith(expect.stringContaining('Restoring existing accessory from cache'))
+			expect(platformMock.log.info).toHaveBeenCalledWith(expect.stringContaining('[Discovery] Matched device to cached accessory'))
+		})
+		it('should handle accessory with no site property (siteInfo fallback)', () => {
+			const platformMock = {
+				log: { info: vi.fn(), warn: vi.fn() },
+				Service: { Lightbulb: {}, AccessoryInformation: {} },
+				Characteristic: { On: 'On', Name: 'Name', Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision' },
+				getDeviceCache: vi.fn(() => ({ getDeviceById: vi.fn(() => ({ _id: 'id', name: 'AP' })), getAllDevices: vi.fn(() => [{ _id: 'id', name: 'AP' }]), setDevices: vi.fn() })),
+				config: { sites: ['default'] },
+				sessionManager: { getSiteName: vi.fn(), getApiHelper: vi.fn() },
+			}
+			const accessPoint = { _id: 'id', name: 'AP' } // no site
+			const mockService = {
+				setCharacteristic: vi.fn().mockReturnThis(),
+				getCharacteristic: vi.fn().mockReturnThis(),
+				onSet: vi.fn().mockReturnThis(),
+				onGet: vi.fn().mockReturnThis(),
+				updateCharacteristic: vi.fn()
+			}
+			const existingAccessory = {
+				displayName: 'AP',
+				context: { accessPoint },
+				getService: vi.fn(() => mockService),
+				addService: vi.fn(() => mockService)
+			}
+			restoreAccessory(platformMock as any, accessPoint as any, existingAccessory as any)
+			expect(platformMock.log.info).toHaveBeenCalledWith(expect.stringContaining('[Discovery] Matched device to cached accessory'))
 		})
 	})
-
 	describe('removeAccessory', () => {
 		it('should handle error in unregisterPlatformAccessories', () => {
 			const platformMock = {
@@ -66,7 +140,7 @@ describe('accessoryFactory', () => {
 					unregisterPlatformAccessories: vi.fn(() => { throw new Error('unregister error') }),
 				},
 				accessories: [{ UUID: 'uuid-1' }],
-				log: { info: vi.fn(), error: vi.fn() },
+				log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 				Service: { Lightbulb: {} },
 				Characteristic: { On: 'On' },
 			}
@@ -74,8 +148,51 @@ describe('accessoryFactory', () => {
 			removeAccessory(platformMock as any, accessory as any)
 			expect(platformMock.log.error).toHaveBeenCalledWith(expect.stringContaining('Error during unregisterPlatformAccessories'))
 		})
+		it('should handle accessory with no site property (siteInfo fallback)', () => {
+			const platformMock = {
+				api: {
+					unregisterPlatformAccessories: vi.fn(),
+				},
+				accessories: [{ UUID: 'uuid-1' }],
+				log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+				Service: { Lightbulb: {} },
+				Characteristic: { On: 'On' },
+			}
+			const accessory = { UUID: 'uuid-1', displayName: 'AP', context: { accessPoint: { _id: 'id', name: 'AP' } } } // no site
+			removeAccessory(platformMock as any, accessory as any)
+			expect(platformMock.log.info).toHaveBeenCalledWith(expect.stringContaining('Removing accessory from cache due to exclusion settings: AP (id )'))
+		})
+		it('should remove accessory normally if found', () => {
+			const platformMock = {
+				api: {
+					unregisterPlatformAccessories: vi.fn(),
+				},
+				accessories: [{ UUID: 'uuid-1' }, { UUID: 'uuid-2' }],
+				log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+				Service: { Lightbulb: {} },
+				Characteristic: { On: 'On' },
+			}
+			const accessory = { UUID: 'uuid-1', displayName: 'AP', context: { accessPoint: { _id: 'id', name: 'AP', site: 'default' } } }
+			removeAccessory(platformMock as any, accessory as any)
+			expect(platformMock.api.unregisterPlatformAccessories).toHaveBeenCalled()
+			expect(platformMock.accessories).toEqual([{ UUID: 'uuid-2' }])
+		})
+		it('should do nothing if accessory is not found in platform.accessories', () => {
+			const platformMock = {
+				api: {
+					unregisterPlatformAccessories: vi.fn(),
+				},
+				accessories: [{ UUID: 'uuid-2' }],
+				log: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+				Service: { Lightbulb: {} },
+				Characteristic: { On: 'On' },
+			}
+			const accessory = { UUID: 'uuid-1', displayName: 'AP', context: { accessPoint: { _id: 'id', name: 'AP', site: 'default' } } }
+			removeAccessory(platformMock as any, accessory as any)
+			expect(platformMock.api.unregisterPlatformAccessories).toHaveBeenCalled()
+			expect(platformMock.accessories).toEqual([{ UUID: 'uuid-2' }])
+		})
 	})
-
 	describe('markAccessoryNotResponding', () => {
 		it('should mark accessory as Not Responding', () => {
 			markAccessoryNotResponding(mockPlatform as any, mockAccessory as any)

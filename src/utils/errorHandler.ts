@@ -46,15 +46,20 @@ export function errorHandler(
 	error: unknown,
 	context?: { site?: string; endpoint?: string }
 ) {
-	const ctx = [
-		context?.site ? `site: ${context.site}` : '',
-		context?.endpoint ? `endpoint: ${context.endpoint}` : ''
-	].filter(Boolean).join(' ')
+	const ctxParts = []
+	if (context?.site) {
+		ctxParts.push(`site: ${context.site}`)
+	}
+	if (context?.endpoint) {
+		ctxParts.push(`endpoint: ${context.endpoint}`)
+	}
+	const ctx = ctxParts.length ? ctxParts.join(', ') : ''
 
 	// Handle custom UniFi errors
 	if (error && typeof error === 'object') {
 		const name = (error as any).name
-		const message = (error as any).message || String(error)
+		const hasMessage = Object.prototype.hasOwnProperty.call(error, 'message')
+		const message = hasMessage ? (error as any).message : String(error)
 		if (name === 'UnifiApiError') {
 			log.error(`API error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 			return

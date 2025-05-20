@@ -10,7 +10,10 @@ export default defineConfig({
 			reportsDirectory: './coverage',
 			exclude: [
 				'**/fixtures/**',
-				'**/index.ts',
+				'src/index.ts',         // top-level
+				'src/**/index.ts',      // all subfolders
+				'**/src/index.ts',      // absolute/relative path quirks
+				'**/src/**/index.ts',   // absolute/relative path quirks
 				'.eslintrc.js',
 			],
 		},

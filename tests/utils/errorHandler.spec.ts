@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { markAccessoryNotResponding, markThisAccessoryNotResponding } from '../../src/utils/errorHandler'
 import { mockPlatform } from '../fixtures/homebridgeMocks'
+import { errorHandler } from '../../src/utils/errorHandler' // Adjust the import based on your file structure
 
 beforeEach(() => {
 	mockPlatform.log.warn.mockClear()
@@ -69,6 +70,74 @@ describe('errorHandler', () => {
 			expect(instance.platform.log.warn).toHaveBeenCalledWith(
 				'Accessory Information Service not found for AP (id, site: site)'
 			)
+		})
+	})
+
+	describe('errorHandler (main function)', () => {
+		let log: any
+		beforeEach(() => {
+			log = { error: vi.fn() }
+		})
+
+		it('logs UnifiApiError with context', () => {
+			const err = { name: 'UnifiApiError', message: 'api fail' }
+			errorHandler(log, err, { site: 'site1', endpoint: '/api' })
+			expect(log.error).toHaveBeenCalledWith('API error [site: site1, endpoint: /api]: api fail')
+		})
+
+		it('logs UnifiAuthError', () => {
+			errorHandler(log, { name: 'UnifiAuthError', message: 'auth fail' })
+			expect(log.error).toHaveBeenCalledWith('Authentication error: auth fail')
+		})
+
+		it('logs UnifiNetworkError', () => {
+			errorHandler(log, { name: 'UnifiNetworkError', message: 'net fail' })
+			expect(log.error).toHaveBeenCalledWith('Network error: net fail')
+		})
+
+		it('logs UnifiConfigError', () => {
+			errorHandler(log, { name: 'UnifiConfigError', message: 'config fail' })
+			expect(log.error).toHaveBeenCalledWith('Config error: config fail')
+		})
+
+		it('logs Error instance with context', () => {
+			errorHandler(log, new Error('err msg'), { site: 'site2' })
+			expect(log.error).toHaveBeenCalledWith('Error [site: site2]: err msg')
+		})
+
+		it('logs object with message property', () => {
+			errorHandler(log, { message: 'msg from obj' })
+			expect(log.error).toHaveBeenCalledWith('Error: msg from obj')
+		})
+
+		it('logs plain object', () => {
+			errorHandler(log, { foo: 1 })
+			expect(log.error).toHaveBeenCalledWith('Error: [object Object]')
+		})
+
+		it('logs string error', () => {
+			errorHandler(log, 'string error')
+			expect(log.error).toHaveBeenCalledWith('Error: string error')
+		})
+
+		it('logs null error', () => {
+			errorHandler(log, null)
+			expect(log.error).toHaveBeenCalledWith('Error: null')
+		})
+
+		it('logs undefined error', () => {
+			errorHandler(log, undefined)
+			expect(log.error).toHaveBeenCalledWith('Error: undefined')
+		})
+
+		it('logs error with empty message', () => {
+			errorHandler(log, { name: 'UnifiApiError', message: '' })
+			expect(log.error).toHaveBeenCalledWith('API error: ')
+		})
+
+		it('logs unknown error type', () => {
+			errorHandler(log, { name: 'OtherError', message: 'other' })
+			expect(log.error).toHaveBeenCalledWith('Error: other')
 		})
 	})
 })

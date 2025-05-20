@@ -5,6 +5,7 @@ import https from 'https'
 import { parse as parseCookie } from 'cookie'
 import { UnifiApiHelper, UnifiApiType } from '../api/unifiApiHelper.js'
 import { UnifiSite, UnifiApiError, UnifiAuthError, UnifiNetworkError } from '../models/unifiTypes.js'
+import { errorHandler } from './errorHandler.js'
 
 /**
  * SessionManager
@@ -76,7 +77,7 @@ export class SessionManager {
 					const decoded = jwt.decode(token) as { csrfToken?: string } | null
 					csrfToken = decoded?.csrfToken ?? ''
 				} catch (err) {
-					this.log.error(`Cookie parsing or token decoding failed for host "${this.host}": ${err}`)
+					errorHandler(this.log, err)
 					throw new UnifiAuthError('UniFi OS authentication failed: Malformed cookie or token.', err)
 				}
 				if (!csrfToken) 
@@ -160,10 +161,10 @@ export class SessionManager {
 			}
 		} catch (error) {
 			if (error instanceof UnifiApiError) {
-				this.log.error(`Failed to load site list from ${url}: ${error.message}`)
+				errorHandler(this.log, error, { endpoint: url })
 				throw error
 			} else {
-				this.log.error(`Failed to load site list from ${url}: ${error instanceof Error ? error.message : error}`)
+				errorHandler(this.log, error, { endpoint: url })
 				throw new UnifiApiError('Failed to load site list', error)
 			}
 		}

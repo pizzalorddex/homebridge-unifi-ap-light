@@ -111,4 +111,56 @@ describe('RecoveryManager', () => {
 		expect(mockDeviceCache.setDevices).not.toHaveBeenCalled()
 		expect(log.warn).toHaveBeenCalledWith('No relevant UniFi APs are ready after controller recovery. Will not update cache or accessories.')
 	})
+
+	// --- branch/edge cases for coverage ---
+	describe('branch/edge cases', () => {
+		it('covers constructor', () => {
+			const rm = new RecoveryManager(sessionManager, refreshDeviceCache, log)
+			expect(rm).toBeInstanceOf(RecoveryManager)
+		})
+
+		it('handles missing platform property (platform = undefined, configSites = ["default"] fallback)', async () => {
+			const recoveryManager = new RecoveryManager(sessionManager, refreshDeviceCache, log)
+			sessionManager.getSiteName = vi.fn(site => site === 'default' ? 'default' : undefined)
+			vi.spyOn(unifiModule, 'getAccessPoints').mockResolvedValue([{ type: 'uap', model: 'U7', _id: '1', last_seen: 1, uptime: 1 } as any])
+			await recoveryManager.forceImmediateCacheRefresh()
+			expect(refreshDeviceCache).toHaveBeenCalled()
+			expect(log.info).toHaveBeenCalledWith('Device cache refreshed after recovery (fallback to full cache refresh).')
+		})
+
+		it('handles platform.config.sites present but empty (configSites = ["default"] fallback)', async () => {
+			const platform = { config: { sites: [] } }
+			const recoveryManager = new TestRecoveryManager(sessionManager, refreshDeviceCache, log, platform)
+			sessionManager.getSiteName = vi.fn(site => site === 'default' ? 'default' : undefined)
+			vi.spyOn(unifiModule, 'getAccessPoints').mockResolvedValue([{ type: 'uap', model: 'U7', _id: '1', last_seen: 1, uptime: 1 } as any])
+			await recoveryManager.forceImmediateCacheRefresh()
+			expect(refreshDeviceCache).toHaveBeenCalled()
+		})
+
+		it('handles platform.config present but missing sites (configSites = ["default"] fallback)', async () => {
+			const platform = { config: {} }
+			const recoveryManager = new TestRecoveryManager(sessionManager, refreshDeviceCache, log, platform)
+			sessionManager.getSiteName = vi.fn(site => site === 'default' ? 'default' : undefined)
+			vi.spyOn(unifiModule, 'getAccessPoints').mockResolvedValue([{ type: 'uap', model: 'U7', _id: '1', last_seen: 1, uptime: 1 } as any])
+			await recoveryManager.forceImmediateCacheRefresh()
+			expect(refreshDeviceCache).toHaveBeenCalled()
+		})
+
+		it('handles all sites failing to resolve (resolvedSites.length === 0)', async () => {
+			const platform = { config: { sites: ['site1', 'site2'] } }
+			const recoveryManager = new TestRecoveryManager(sessionManager, refreshDeviceCache, log, platform)
+			sessionManager.getSiteName = vi.fn(() => undefined)
+			await recoveryManager.forceImmediateCacheRefresh()
+			expect(log.error).toHaveBeenCalledWith('No valid sites resolved. Aborting recovery cache refresh.')
+		})
+
+		it('handles platform present but missing config (configSites = ["default"] fallback)', async () => {
+			const platform = {}
+			const recoveryManager = new TestRecoveryManager(sessionManager, refreshDeviceCache, log, platform)
+			sessionManager.getSiteName = vi.fn(site => site === 'default' ? 'default' : undefined)
+			vi.spyOn(unifiModule, 'getAccessPoints').mockResolvedValue([{ type: 'uap', model: 'U7', _id: '1', last_seen: 1, uptime: 1 } as any])
+			await recoveryManager.forceImmediateCacheRefresh()
+			expect(refreshDeviceCache).toHaveBeenCalled()
+		})
+	})
 })
