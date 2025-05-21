@@ -5,16 +5,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import Axios from 'axios'
 import { UnifiApiType } from '../../src/api/unifiApiHelper.js'
 import { mockLogger } from '../fixtures/homebridgeMocks.js'
+import { mockAxiosResponse } from '../fixtures/apiFixtures'
 
-// Helper for AxiosResponse mock
-import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
-const mockAxiosResponse = (data: any): AxiosResponse => ({
-	data,
-	status: 200,
-	statusText: 'OK',
-	headers: {},
-	config: { headers: {} } as InternalAxiosRequestConfig,
-})
+// Removed local mockAxiosResponse definition
 
 describe('SessionManager', () => {
 	let log: Logger

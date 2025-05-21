@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { RecoveryManager } from '../../src/platform/recoveryManager.js'
 import { UnifiAuthError } from '../../src/models/unifiTypes.js'
 import { getMockDeviceCache } from '../fixtures/deviceCacheMocks'
+import { mockLogger, makeSessionManager, mockRefreshDeviceCache } from '../fixtures/homebridgeMocks'
 import * as unifiModule from '../../src/unifi'
 
 describe('RecoveryManager', () => {
@@ -19,19 +20,9 @@ describe('RecoveryManager', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
-		sessionManager = {
-			authenticate: vi.fn().mockResolvedValue(undefined),
-			getSiteName: vi.fn(site => site),
-			getApiHelper: vi.fn(() => ({})),
-			request: vi.fn()
-		}
-		refreshDeviceCache = vi.fn().mockResolvedValue(undefined)
-		log = {
-			info: vi.fn(),
-			warn: vi.fn(),
-			error: vi.fn(),
-			debug: vi.fn(),
-		}
+		sessionManager = makeSessionManager()
+		refreshDeviceCache = mockRefreshDeviceCache
+		log = mockLogger
 		// Do not assign recoveryManager here; each test will create its own instance as needed
 	})
 

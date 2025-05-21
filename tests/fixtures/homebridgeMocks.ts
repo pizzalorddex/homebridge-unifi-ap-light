@@ -78,6 +78,22 @@ export const mockAccessory = {
 	displayName: 'Test AP',
 }
 
+export function makeAccessory(name = 'Test', id = 'id') {
+	return {
+		...mockAccessory,
+		displayName: name,
+		context: { accessPoint: { ...mockAccessory.context.accessPoint, name, _id: id } },
+	}
+}
+
+export function makeAccessoryWithUUID(name: string, id: string, uuid: string, contextOverride?: any) {
+	return {
+		...makeAccessory(name, id),
+		UUID: uuid,
+		...(contextOverride ? { context: contextOverride } : {}),
+	}
+}
+
 export const sharedMockCache = {
 	getDeviceById: vi.fn(() => mockAccessory.context.accessPoint),
 	getAllDevices: vi.fn(() => [mockAccessory.context.accessPoint]),
@@ -101,4 +117,31 @@ export const mockApi = {
 	on: vi.fn(),
 	registerPlatformAccessories: vi.fn(),
 	unregisterPlatformAccessories: vi.fn(),
+}
+
+/**
+ * Generic mock for refreshDeviceCache (Promise<void> signature)
+ */
+export const mockRefreshDeviceCache: () => Promise<void> = vi.fn().mockResolvedValue(undefined)
+
+export function makeSessionManager(overrides = {}) {
+	return {
+		authenticate: vi.fn().mockResolvedValue(undefined),
+		getSiteName: vi.fn(site => site),
+		getApiHelper: vi.fn(() => ({})),
+		request: vi.fn(),
+		...overrides,
+	}
+}
+
+// --- Platform/Accessory/Discovery top-level mocks for tests ---
+export const mockRestoreAccessory = vi.fn()
+export const mockRemoveAccessory = vi.fn()
+export const mockCreateAndRegisterAccessory = vi.fn()
+
+export function createMockAccessoryList() {
+	return [
+		makeAccessoryWithUUID('AP1', 'uuid-1', 'uuid-1', { accessPoint: { _id: 'uuid-1' } }),
+		makeAccessoryWithUUID('AP2', 'uuid-2', 'uuid-2', { accessPoint: { _id: 'uuid-2' } }),
+	]
 }

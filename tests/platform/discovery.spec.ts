@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mockPlatform, makeAccessoryWithUUID, mockRestoreAccessory, mockRemoveAccessory, mockCreateAndRegisterAccessory, createMockAccessoryList } from '../fixtures/homebridgeMocks'
 
-// Mock getAccessPoints and markAccessoryNotResponding at the top level
+// Use shared mocks instead of local top-level mocks
 let getAccessPoints: any
 let markAccessoryNotResponding: any
-const restoreAccessory = vi.fn()
-const removeAccessory = vi.fn()
-const createAndRegisterAccessory = vi.fn()
+const restoreAccessory = mockRestoreAccessory
+const removeAccessory = mockRemoveAccessory
+const createAndRegisterAccessory = mockCreateAndRegisterAccessory
+
 vi.mock('../../src/unifi', () => ({
 	getAccessPoints: (...args: any[]) => getAccessPoints(...args)
 }))
@@ -42,22 +44,10 @@ describe('discoverDevices', () => {
 				platformArg.accessories.splice(idx, 1)
 			}
 		})
-		const accessories = [
-			{
-				UUID: 'uuid-1',
-				displayName: 'AP1',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-				context: { accessPoint: { _id: 'uuid-1' } },
-			},
-			{
-				UUID: 'uuid-2',
-				displayName: 'AP2',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-				context: { accessPoint: { _id: 'uuid-2' } },
-			},
-		]
+		const accessories = createMockAccessoryList()
 
 		platform = {
+			...mockPlatform,
 			log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 			config: { sites: ['default'], includeIds: [], excludeIds: [] },
 			api: { hap: { uuid: { generate: vi.fn((id: string) => `uuid-${id}`) } } },
@@ -109,11 +99,7 @@ describe('discoverDevices', () => {
 
 		it('restores existing accessories if included', async () => {
 			getAccessPoints.mockResolvedValue([{ _id: 'uuid-1', type: 'uap' }])
-			platform.accessories = [{
-				UUID: 'uuid-uuid-1',
-				displayName: 'AP1',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-			}]
+			platform.accessories = [makeAccessoryWithUUID('AP1', 'uuid-1', 'uuid-uuid-1')]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
 			expect(restoreAccessory).toHaveBeenCalledWith(platform, { _id: 'uuid-1', type: 'uap' }, platform.accessories[0])
@@ -122,12 +108,7 @@ describe('discoverDevices', () => {
 		it('removes excluded accessories', async () => {
 			getAccessPoints.mockResolvedValue([{ _id: 'ap1' }])
 			platform.config.excludeIds = ['ap1']
-			platform.accessories = [{
-				UUID: 'uuid-ap1',
-				displayName: 'AP1',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-				context: { accessPoint: { _id: 'ap1' } },
-			}]
+			platform.accessories = [makeAccessoryWithUUID('AP1', 'ap1', 'uuid-ap1', { accessPoint: { _id: 'ap1' } })]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
 			expect(removeAccessory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ UUID: 'uuid-ap1' }))
@@ -136,11 +117,7 @@ describe('discoverDevices', () => {
 		it('does not register excluded accessories', async () => {
 			getAccessPoints.mockResolvedValue([{ _id: 'ap1' }])
 			platform.config.excludeIds = ['ap1']
-			platform.accessories = [{
-				UUID: 'uuid-ap1',
-				displayName: 'AP1',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-			}]
+			platform.accessories = [makeAccessoryWithUUID('AP1', 'ap1', 'uuid-ap1')]
 			await discoverDevices(platform)
 			expect(createAndRegisterAccessory).not.toHaveBeenCalled()
 		})
@@ -282,12 +259,7 @@ describe('discoverDevices', () => {
 			getAccessPoints.mockResolvedValue([{ _id: 'ap1', type: 'uap' }])
 			platform.config.excludeIds = ['ap1']
 			platform.config.includeIds = undefined // fallback: isIncluded = true
-			platform.accessories = [{
-				UUID: 'uuid-ap1',
-				displayName: 'AP1',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-				context: { accessPoint: { _id: 'ap1' } },
-			}]
+			platform.accessories = [makeAccessoryWithUUID('AP1', 'ap1', 'uuid-ap1', { accessPoint: { _id: 'ap1' } })]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
 			expect(removeAccessory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ UUID: 'uuid-ap1' }))
@@ -312,12 +284,7 @@ describe('discoverDevices', () => {
 			getAccessPoints.mockResolvedValue([{ _id: 'apX', type: 'uap' }])
 			platform.config.includeIds = undefined // fallback: isIncluded = true
 			platform.config.excludeIds = ['apX']
-			platform.accessories = [{
-				UUID: 'uuid-apX',
-				displayName: 'APX',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-				context: { accessPoint: { _id: 'apX' } },
-			}]
+			platform.accessories = [makeAccessoryWithUUID('APX', 'apX', 'uuid-apX', { accessPoint: { _id: 'apX' } })]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
 			expect(removeAccessory).toHaveBeenCalledWith(platform, expect.objectContaining({ UUID: 'uuid-apX' }))
@@ -342,18 +309,8 @@ describe('discoverDevices', () => {
 			platform.config.includeIds = ['apZ']
 			platform.config.excludeIds = []
 			platform.accessories = [
-				{
-					UUID: 'uuid-apZ',
-					displayName: 'APZ',
-					getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-					context: { accessPoint: { _id: 'apZ' } },
-				},
-				{
-					UUID: 'uuid-apW',
-					displayName: 'APW',
-					getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-					context: { accessPoint: { _id: 'apW' } },
-				},
+				makeAccessoryWithUUID('APZ', 'apZ', 'uuid-apZ', { accessPoint: { _id: 'apZ' } }),
+				makeAccessoryWithUUID('APW', 'apW', 'uuid-apW', { accessPoint: { _id: 'apW' } }),
 			]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
@@ -367,12 +324,7 @@ describe('discoverDevices', () => {
 			getAccessPoints.mockResolvedValue([{ _id: 'apN', type: 'uap' }])
 			platform.config.includeIds = ['something-else'] // apN is not included
 			platform.config.excludeIds = ['something-else'] // apN is not excluded
-			platform.accessories = [{
-				UUID: 'uuid-apN',
-				displayName: 'APN',
-				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
-				context: { accessPoint: { _id: 'apN' } },
-			}]
+			platform.accessories = [makeAccessoryWithUUID('APN', 'apN', 'uuid-apN', { accessPoint: { _id: 'apN' } })]
 			platform.api.hap.uuid.generate = vi.fn((id: string) => `uuid-${id}`)
 			await discoverDevices(platform)
 			expect(removeAccessory).toHaveBeenCalledTimes(1)

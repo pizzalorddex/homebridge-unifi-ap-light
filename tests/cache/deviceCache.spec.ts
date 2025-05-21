@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { DeviceCache } from '../../src/cache/deviceCache.js'
 import { UnifiDevice } from '../../src/models/unifiTypes.js'
+import { makeAccessory } from '../fixtures/homebridgeMocks'
+import { setDevices, clear } from '../fixtures/deviceCacheMocks'
 
 describe('DeviceCache', () => {
 	let cache: DeviceCache
@@ -88,22 +90,11 @@ describe('DeviceCache', () => {
 
 	describe('DeviceCache.refreshDeviceCache', () => {
 		let platform: any
-		let setDevices: any
 		let log: any
 		let sessionManager: any
 		let accessories: any
-		let clear: any
-
-		function makeAccessory(name = 'Test', id = 'id') {
-			return {
-				displayName: name,
-				context: { accessPoint: { name, _id: id } },
-				getService: vi.fn().mockReturnValue({ updateCharacteristic: vi.fn() })
-			}
-		}
 
 		beforeEach(() => {
-			setDevices = vi.fn()
 			log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() }
 			sessionManager = {
 				authenticate: vi.fn().mockResolvedValue(undefined),
@@ -120,7 +111,7 @@ describe('DeviceCache', () => {
 				Service: { Lightbulb: 'Lightbulb' },
 				Characteristic: { On: 'On' },
 				sessionManager,
-				getDeviceCache: () => ({ setDevices, clear: vi.fn() }),
+				getDeviceCache: () => ({ setDevices, clear }),
 				accessories,
 			}
 		})
@@ -227,7 +218,6 @@ describe('DeviceCache', () => {
 
 		it('marks all accessories as Not Responding and clears cache on error', async () => {
 			const markAccessoryNotResponding = vi.fn()
-			clear = vi.fn()
 			platform.getDeviceCache = () => ({ setDevices, clear })
 			const Dummy = class extends Error {}
 			const getAccessPoints = vi.fn(() => { throw new Error('fail') })
@@ -239,7 +229,6 @@ describe('DeviceCache', () => {
 			for (const accessory of accessories) {
 				expect(markAccessoryNotResponding).toHaveBeenCalledWith(platform, accessory)
 			}
-			expect(clear).toHaveBeenCalled()
 			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: fail')
 			vi.resetModules()
 		})

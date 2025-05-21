@@ -1,6 +1,7 @@
 // Test fixtures for API responses
 import path from 'path'
 import fs from 'fs'
+import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
 export function loadFixture(name: string) {
 	if (name === 'site-list-success.fixture.json') {
@@ -73,3 +74,12 @@ export function loadFixture(name: string) {
 	const filePath = path.resolve(__dirname, name)
 	return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
 }
+
+// Helper for AxiosResponse mock (for sessionManager.spec.ts)
+export const mockAxiosResponse = (data: any): AxiosResponse => ({
+	data,
+	status: 200,
+	statusText: 'OK',
+	headers: {},
+	config: { headers: {} } as InternalAxiosRequestConfig,
+})

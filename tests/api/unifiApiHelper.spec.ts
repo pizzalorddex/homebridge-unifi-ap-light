@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { UnifiApiHelper, UnifiApiType } from '../../src/api/unifiApiHelper.js'
 import { loadFixture } from '../fixtures/apiFixtures.js'
+import { mockLoggerFull } from '../fixtures/homebridgeMocks.js'
 
 describe('UnifiApiHelper', () => {
 	let apiHelper: UnifiApiHelper
@@ -53,28 +54,14 @@ describe('UnifiApiHelper', () => {
 	describe('API Type Detection', () => {
 		it('should throw if detectApiType fails both endpoints', async () => {
 			const instance = { post: vi.fn().mockRejectedValue(new Error('fail')) }
-			const log = {
-				debug: vi.fn(),
-				error: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-				success: vi.fn(),
-				log: vi.fn(),
-			}
+			const log = mockLoggerFull
 			const helper = new UnifiApiHelper()
 			await expect(helper.detectApiType(instance as any, 'u', 'p', log)).rejects.toThrow('Unable to detect UniFi API structure.')
 		})
 
 		it('should detect UnifiOS API type', async () => {
 			const instance = { post: vi.fn().mockResolvedValueOnce({}) }
-			const log = {
-				debug: vi.fn(),
-				error: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-				success: vi.fn(),
-				log: vi.fn(),
-			}
+			const log = mockLoggerFull
 			const type = await apiHelper.detectApiType(instance as any, 'u', 'p', log)
 			expect(type).toBe(UnifiApiType.UnifiOS)
 			expect(apiHelper.getApiType()).toBe(UnifiApiType.UnifiOS)
@@ -86,14 +73,7 @@ describe('UnifiApiHelper', () => {
 					.mockRejectedValueOnce(new Error('fail'))
 					.mockResolvedValueOnce({}),
 			}
-			const log = {
-				debug: vi.fn(),
-				error: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-				success: vi.fn(),
-				log: vi.fn(),
-			}
+			const log = mockLoggerFull
 			const type = await apiHelper.detectApiType(instance as any, 'u', 'p', log)
 			expect(type).toBe(UnifiApiType.SelfHosted)
 			expect(apiHelper.getApiType()).toBe(UnifiApiType.SelfHosted)
@@ -104,14 +84,7 @@ describe('UnifiApiHelper', () => {
 			const instance = {
 				post: vi.fn().mockResolvedValueOnce({ data: fixture })
 			}
-			const log = {
-				debug: vi.fn(),
-				error: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-				success: vi.fn(),
-				log: vi.fn(),
-			}
+			const log = mockLoggerFull
 			const type = await apiHelper.detectApiType(instance as any, 'u', 'p', log)
 			// Adjust the expected type if your fixture is for SelfHosted
 			expect([UnifiApiType.UnifiOS, UnifiApiType.SelfHosted]).toContain(type)

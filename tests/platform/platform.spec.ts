@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { UnifiAPLight } from '../../src/platform.js'
 import { DeviceCache } from '../../src/cache/deviceCache.js'
 import { discoverDevices } from '../../src/platform/discovery.js'
-import { mockLogger, mockApi } from '../fixtures/homebridgeMocks'
+import { mockLogger, mockApi, makeAccessory } from '../fixtures/homebridgeMocks'
 
 // --- Mocks and Setup ---
 const validConfig = {
@@ -66,7 +66,7 @@ describe('UnifiAPLight Platform', () => {
 
 	// --- Integration: configureAccessory ---
 	it('adds accessory to cache and logs info', () => {
-		const accessory = { displayName: 'Test', UUID: 'uuid-1', context: { accessPoint: { _id: 'ap-id', site: 'mysite' } } } as any
+		const accessory = makeAccessory('Test', 'ap-id') as any
 		platform.configureAccessory(accessory)
 		expect(platform.accessories).toContain(accessory)
 		expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('[Cache Restore] Registered cached accessory with Homebridge'))
