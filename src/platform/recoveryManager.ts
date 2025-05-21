@@ -68,6 +68,7 @@ export class RecoveryManager {
 				await this.refreshDeviceCache()
 				this.log.debug('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 			}
+			// Log as info, not error, for successful completion
 			errorHandler(this.log, { name: 'RecoveryInfo', message: 'Immediate cache refresh completed successfully.' }, { endpoint: 'forceImmediateCacheRefresh' })
 		} catch (err) {
 			errorHandler(this.log, { name: 'RecoveryError', message: 'Immediate cache refresh failed', error: err instanceof Error ? err.message : String(err) }, { endpoint: 'forceImmediateCacheRefresh' })

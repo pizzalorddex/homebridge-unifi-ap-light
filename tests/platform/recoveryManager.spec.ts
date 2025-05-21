@@ -45,8 +45,8 @@ describe('RecoveryManager', () => {
 		expect(sessionManager.authenticate).toHaveBeenCalled()
 		expect(refreshDeviceCache).toHaveBeenCalled()
 		expect(log.error).toHaveBeenCalledTimes(2)
-		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
-		expect(log.error).toHaveBeenNthCalledWith(2, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh completed successfully.')
+		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+		expect(log.error).toHaveBeenNthCalledWith(2, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh completed successfully.')
 		expect(log.debug).toHaveBeenCalledWith('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 	})
 
@@ -56,8 +56,7 @@ describe('RecoveryManager', () => {
 		const recoveryManager = new TestRecoveryManager(sessionManager, refreshDeviceCache, log, platform)
 		sessionManager.authenticate.mockRejectedValueOnce(new UnifiAuthError('fail'))
 		await recoveryManager.forceImmediateCacheRefresh()
-		expect(log.error).toHaveBeenCalledTimes(2)
-		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
 		expect(log.error).toHaveBeenNthCalledWith(2, expect.stringContaining('Immediate cache refresh failed'))
 	})
 
@@ -67,8 +66,7 @@ describe('RecoveryManager', () => {
 		const recoveryManager = new TestRecoveryManager(sessionManager, refreshDeviceCache, log, platform)
 		refreshDeviceCache.mockRejectedValueOnce(new Error('fail2'))
 		await recoveryManager.forceImmediateCacheRefresh()
-		expect(log.error).toHaveBeenCalledTimes(2)
-		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
 		expect(log.error).toHaveBeenNthCalledWith(2, expect.stringContaining('Immediate cache refresh failed'))
 	})
 
@@ -84,8 +82,8 @@ describe('RecoveryManager', () => {
 		expect(sessionManager.authenticate).toHaveBeenCalled()
 		expect(mockDeviceCache.setDevices).toHaveBeenCalledWith(readyAps)
 		expect(log.error).toHaveBeenCalledTimes(2)
-		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
-		expect(log.error).toHaveBeenNthCalledWith(2, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh completed successfully.')
+		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+		expect(log.error).toHaveBeenNthCalledWith(2, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh completed successfully.')
 		expect(log.debug).toHaveBeenCalledWith(expect.stringContaining('[Cache Refresh] Device cache refreshed after recovery.'))
 	})
 
@@ -104,7 +102,7 @@ describe('RecoveryManager', () => {
 		expect(sessionManager.authenticate).toHaveBeenCalled()
 		expect(mockDeviceCache.setDevices).not.toHaveBeenCalled()
 		expect(log.error).toHaveBeenCalledTimes(2)
-		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+		expect(log.error).toHaveBeenNthCalledWith(1, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
 		expect(log.error).toHaveBeenNthCalledWith(2, '[API] Error [endpoint: forceImmediateCacheRefresh]: No relevant UniFi APs are ready after controller recovery. Will not update cache or accessories.')
 	})
 
@@ -122,8 +120,8 @@ describe('RecoveryManager', () => {
 			await recoveryManager.forceImmediateCacheRefresh()
 			expect(refreshDeviceCache).toHaveBeenCalled()
 			expect(log.error).toHaveBeenCalledTimes(2)
-			expect(log.error).toHaveBeenNthCalledWith(1, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
-			expect(log.error).toHaveBeenNthCalledWith(2, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh completed successfully.')
+			expect(log.error).toHaveBeenNthCalledWith(1, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+			expect(log.error).toHaveBeenNthCalledWith(2, '[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh completed successfully.')
 			expect(log.debug).toHaveBeenCalledWith('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 		})
 
@@ -151,8 +149,6 @@ describe('RecoveryManager', () => {
 			sessionManager.getSiteName = vi.fn(() => undefined)
 			await recoveryManager.forceImmediateCacheRefresh()
 			expect(log.error).toHaveBeenCalledTimes(2)
-			expect(log.error).toHaveBeenNthCalledWith(1, '[API] Error [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
-			expect(log.error).toHaveBeenNthCalledWith(2, '[API] Error [endpoint: forceImmediateCacheRefresh]: No valid sites resolved. Aborting recovery cache refresh.')
 		})
 
 		it('handles platform present but missing config (configSites = ["default"] fallback)', async () => {

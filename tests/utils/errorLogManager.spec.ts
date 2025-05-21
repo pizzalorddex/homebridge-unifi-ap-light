@@ -48,7 +48,7 @@ describe('errorLogManager', () => {
 		shouldLogError(errorKey, errorMsg)
 		for (let i = 0; i < 3; i++) 
 			shouldLogError(errorKey, errorMsg)
-		advanceTime(31000)
+		advanceTime(61000)
 		const result = shouldLogError(errorKey, errorMsg)
 		expect(result.logLevel).toBe('error')
 	})

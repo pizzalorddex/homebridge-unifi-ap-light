@@ -4,7 +4,7 @@
  * Ensures repeated errors are not spammed to the log, and escalates/downgrades log level as needed.
  */
 
-export type LogLevel = 'error' | 'warn' | 'debug' | 'none'
+export type LogLevel = 'error' | 'warn' | 'debug' | 'info' | 'none'
 
 interface ErrorState {
 	lastMessage: string
@@ -15,7 +15,7 @@ interface ErrorState {
 }
 
 export const errorStates: Record<string, ErrorState> = {}
-const COOLDOWN_MS = 30000 // 30 seconds
+const COOLDOWN_MS = 60000 // 1 minute
 
 /**
  * Generate a unique key for an error based on type, message, and context.

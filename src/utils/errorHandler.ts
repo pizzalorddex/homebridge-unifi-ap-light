@@ -71,7 +71,7 @@ export function errorHandler(
 	}
 	const errorKey = getErrorKey(name, message, ctx)
 
-	let logLevel: 'error' | 'warn' | 'debug' | 'none' = 'error'
+	let logLevel: 'error' | 'warn' | 'debug' | 'info' | 'none' = 'error'
 	// Apply suppression/throttling for all errors
 	const result = shouldLogError(errorKey, message)
 	logLevel = result.logLevel
@@ -89,6 +89,8 @@ export function errorHandler(
 	let logFn: (msg: string) => void = noop
 	if (logLevel === 'error' && typeof log.error === 'function') {
 		logFn = log.error.bind(log)
+	} else if (logLevel === 'info' && typeof log.info === 'function') {
+		logFn = log.info.bind(log)
 	} else if (logLevel === 'debug' && typeof log.debug === 'function') {
 		logFn = log.debug.bind(log)
 	} else if (logLevel === 'warn' && typeof log.warn === 'function') {
@@ -98,6 +100,14 @@ export function errorHandler(
 	}
 
 	// Handle custom UniFi errors
+	if (name === 'RecoveryInfo') {
+		if (summary) {
+			logFn(`[API] Info${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] Info${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
+		}
+		return
+	}
 	if (name === 'UnifiApiError') {
 		if (summary) {
 			logFn(`[API] API error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
@@ -152,3 +162,5 @@ export function errorHandler(
 		}
 	}
 }
+
+export type LogLevel = 'error' | 'warn' | 'debug' | 'info' | 'none'
