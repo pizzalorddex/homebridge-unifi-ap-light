@@ -4,6 +4,7 @@ import { UnifiApiHelper } from '../api/unifiApiHelper.js'
 import { getAccessPoints } from '../unifi.js'
 import { filterRelevantAps } from '../utils/apFilter.js'
 import { errorHandler } from '../utils/errorHandler.js'
+import { shouldLogError, getErrorKey } from '../utils/errorLogManager.js'
 
 /**
  * Handles platform recovery actions such as immediate re-authentication and device cache refresh.
@@ -23,7 +24,20 @@ export class RecoveryManager {
    * @returns {Promise<void>}
    */
 	public async forceImmediateCacheRefresh(): Promise<void> {
-		errorHandler(this.log, { name: 'RecoveryInfo', message: 'Immediate cache refresh requested (triggered by accessory error).' }, { endpoint: 'forceImmediateCacheRefresh' })
+		// Suppress the info log using errorLogManager
+		const infoKey = getErrorKey(
+			'RecoveryInfo',
+			'Immediate cache refresh requested (triggered by accessory error).',
+			'endpoint: forceImmediateCacheRefresh'
+		)
+		const { logLevel } = shouldLogError(
+			infoKey,
+			'Immediate cache refresh requested (triggered by accessory error).',
+			'info'
+		)
+		if (logLevel !== 'none') {
+			this.log.info('[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+		}
 		try {
 			await this.sessionManager.authenticate()
 

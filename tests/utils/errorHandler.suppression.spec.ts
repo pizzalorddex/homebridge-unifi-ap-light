@@ -50,4 +50,50 @@ describe('errorHandler log suppression and offline mode (real errorLogManager)',
 		// After reset and cooldown, should log error again
 		expect(log.error).toHaveBeenCalledTimes(2)
 	})
+
+	it('suppresses repeated info logs after first log (recovery info suppression)', async () => {
+		resetErrorState()
+		const infoMsg = 'Immediate cache refresh requested (triggered by accessory error).'
+		const ctx = 'endpoint: forceImmediateCacheRefresh'
+		const { getErrorKey, shouldLogError } = await import('../../src/utils/errorLogManager.js')
+		const infoKey = getErrorKey('RecoveryInfo', infoMsg, ctx)
+		// First log should be info
+		let result = shouldLogError(infoKey, infoMsg, 'info')
+		expect(result.logLevel).toBe('info')
+		// Next 5 logs should be suppressed
+		for (let i = 0; i < 5; i++) {
+			result = shouldLogError(infoKey, infoMsg, 'info')
+			expect(result.logLevel).toBe('none')
+		}
+	})
+
+	it('logs info again after cooldown (recovery info suppression)', async () => {
+		resetErrorState()
+		const { errorStates } = await import('../../src/utils/errorLogManager.js')
+		Object.keys(errorStates).forEach(k => delete errorStates[k])
+		const infoMsg = 'Immediate cache refresh requested (triggered by accessory error).'
+		const ctx = 'endpoint: forceImmediateCacheRefresh'
+		const { getErrorKey, shouldLogError } = await import('../../src/utils/errorLogManager.js')
+		const infoKey = getErrorKey('RecoveryInfo', infoMsg, ctx)
+
+		// Mock Date.now for full control
+		const baseTime = 1000000
+		let now = baseTime
+		const realDateNow = Date.now
+		Date.now = () => now
+
+		// First log
+		let result = shouldLogError(infoKey, infoMsg, 'info')
+		expect(result.logLevel).toBe('info')
+		// Suppress a few
+		for (let i = 0; i < 3; i++) {
+			result = shouldLogError(infoKey, infoMsg, 'info')
+			expect(result.logLevel).toBe('none')
+		}
+		// Simulate time passing
+		now += 61000
+		result = shouldLogError(infoKey, infoMsg, 'info')
+		Date.now = realDateNow
+		expect(result.logLevel).toBe('info')
+	})
 })
