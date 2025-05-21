@@ -60,6 +60,8 @@ export function resetErrorState(): void {
 /**
  * Determines if an error should be logged, at what level, and if a summary should be shown.
  * Returns logLevel and optional summary string.
+ *
+ * New logic: Log the first error, suppress all repeats for COOLDOWN_MS, then allow the next, etc.
  */
 export function shouldLogError(errorKey: string, message: string): { logLevel: LogLevel, summary?: string } {
 	const now = Date.now()
@@ -67,7 +69,7 @@ export function shouldLogError(errorKey: string, message: string): { logLevel: L
 	if (!state) {
 		state = errorStates[errorKey] = {
 			lastMessage: message,
-			lastTimestamp: now,
+			lastTimestamp: 0,
 			count: 0,
 			suppressed: 0,
 			offline: false,
@@ -82,25 +84,20 @@ export function shouldLogError(errorKey: string, message: string): { logLevel: L
 		state.lastMessage = message
 		state.count = 0
 		state.suppressed = 0
+		state.lastTimestamp = 0
 	}
-	state.count++
-	// 1st call: log error
-	if (state.count === 1 || now - state.lastTimestamp > COOLDOWN_MS) {
+	// If enough time has passed, log again
+	if (now - state.lastTimestamp > COOLDOWN_MS) {
 		state.lastTimestamp = now
 		state.suppressed = 0
 		return { logLevel: 'error' }
 	}
-	// 7th: log summary
-	if (state.count === 7) {
-		return {
-			logLevel: 'error',
-			summary: `Suppressed 6 repeated errors in the last ${COOLDOWN_MS / 1000} seconds.`
-		}
+	// If first time (lastTimestamp is 0), log
+	if (state.lastTimestamp === 0) {
+		state.lastTimestamp = now
+		return { logLevel: 'error' }
 	}
-	// 2nd–6th: suppress
-	if (state.count > 1 && state.count < 7) {
-		return { logLevel: 'none' }
-	}
-	// 8th+: suppress
-	return { logLevel: 'none' } as const
+	// Otherwise, suppress
+	state.suppressed++
+	return { logLevel: 'none' }
 }

@@ -71,9 +71,15 @@ export function errorHandler(
 	}
 	const errorKey = getErrorKey(name, message, ctx)
 
-	let logLevel: 'error' | 'warn' | 'debug' | 'info' | 'none' = 'error'
-	// Apply suppression/throttling for all errors
-	const result = shouldLogError(errorKey, message)
+	let logLevel: LogLevel = 'error'
+	// For info-level messages, always use info
+	if (name === 'RecoveryInfo') {
+		logLevel = 'info'
+	}
+	// Apply suppression/throttling for all errors (except info)
+	const result = name === 'RecoveryInfo'
+		? { logLevel: 'info' as LogLevel }
+		: shouldLogError(errorKey, message)
 	logLevel = result.logLevel
 	const summary = result.summary
 	// Only set offline for network/auth errors after summary is logged (i.e., after 7th call)

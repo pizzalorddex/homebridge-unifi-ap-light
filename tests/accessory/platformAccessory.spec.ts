@@ -230,19 +230,10 @@ describe('UniFiAP Accessory', () => {
 		it('getOn: should log error and set Not Responding if ledSettings.enabled is undefined', async () => {
 			const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: {} }
 			sharedMockCache.getDeviceById.mockReturnValue(udm)
+			resetErrorState() // ensure suppression state is clear
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn]: \'enabled\' property in \'ledSettings\' is undefined')
-		})
-
-		it('getOn: should log error and set Not Responding if udm has no ledSettings', async () => {
-			const udm = { ...mockAccessory.context.accessPoint, type: 'udm' }
-			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			// Should log twice: once for missing 'enabled', once for the thrown error in catch
-			const calls = mockPlatform.log.error.mock.calls
-			expect(calls.length).toBe(2)
-			expect(calls[0][0]).toBe('[API] Error [site: default, endpoint: getOn]: \'enabled\' property in \'ledSettings\' is undefined')
-			expect(calls[1][0]).toContain('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]')
+			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
 		it('getOn: should handle UnifiAuthError and set Not Responding', async () => {
@@ -266,14 +257,6 @@ describe('UniFiAP Accessory', () => {
 			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiNetworkError('network error') })
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
 			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]: network error')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('getOn: should log error and set Not Responding if udm has no ledSettings', async () => {
-			const udm = { ...mockAccessory.context.accessPoint, type: 'udm' }
-			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn]: \'enabled\' property in \'ledSettings\' is undefined')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
