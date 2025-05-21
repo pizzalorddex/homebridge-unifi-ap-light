@@ -119,7 +119,7 @@ describe('DeviceCache', () => {
 		it('logs error and returns if no valid sites', async () => {
 			platform.config.sites = ['invalid']
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] No valid sites resolved. Aborting device cache refresh.')
+			expect(log.error).toHaveBeenCalledWith('[API] Error [endpoint: refreshDeviceCache]: No valid sites resolved. Aborting device cache refresh.')
 			expect(setDevices).not.toHaveBeenCalled()
 		})
 
@@ -153,10 +153,10 @@ describe('DeviceCache', () => {
 			const UnifiAuthError = class extends Error {}
 			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError, UnifiApiError: class {}, UnifiNetworkError: class {} }))
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new UnifiAuthError('authfail') }) }))
-			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn(), errorHandler: (log: any) => log.error('[API] Authentication error [endpoint: refreshDeviceCache]: authfail') }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: Failed to detect UniFi API structure during authentication')
+			expect(log.error).toHaveBeenCalledWith('[API] Authentication error [endpoint: refreshDeviceCache]: authfail')
 			vi.resetModules()
 		})
 
@@ -164,10 +164,10 @@ describe('DeviceCache', () => {
 			const UnifiApiError = class extends Error {}
 			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiApiError, UnifiAuthError: class {}, UnifiNetworkError: class {} }))
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new UnifiApiError('apifail') }) }))
-			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn(), errorHandler: (log: any) => log.error('[API] API error [endpoint: refreshDeviceCache]: apifail') }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: apifail')
+			expect(log.error).toHaveBeenCalledWith('[API] API error [endpoint: refreshDeviceCache]: apifail')
 			vi.resetModules()
 		})
 
@@ -175,10 +175,10 @@ describe('DeviceCache', () => {
 			const UnifiNetworkError = class extends Error {}
 			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiNetworkError, UnifiAuthError: class {}, UnifiApiError: class {} }))
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new UnifiNetworkError('netfail') }) }))
-			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn(), errorHandler: (log: any) => log.error('[API] Network error [endpoint: refreshDeviceCache]: netfail') }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: netfail')
+			expect(log.error).toHaveBeenCalledWith('[API] Network error [endpoint: refreshDeviceCache]: netfail')
 			vi.resetModules()
 		})
 
@@ -186,10 +186,10 @@ describe('DeviceCache', () => {
 			const Dummy = class extends Error {}
 			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw new Error('fail') }) }))
-			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn(), errorHandler: (log: any) => log.error('[API] Error [endpoint: refreshDeviceCache]: fail') }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: fail')
+			expect(log.error).toHaveBeenCalledWith('[API] Error [endpoint: refreshDeviceCache]: fail')
 			vi.resetModules()
 		})
 
@@ -197,10 +197,10 @@ describe('DeviceCache', () => {
 			const Dummy = class extends Error {}
 			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw 'failstr' }) }))
-			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn(), errorHandler: (log: any) => log.error('[API] Error [endpoint: refreshDeviceCache]: failstr') }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed:', 'failstr')
+			expect(log.error).toHaveBeenCalledWith('[API] Error [endpoint: refreshDeviceCache]: failstr')
 			vi.resetModules()
 		})
 
@@ -209,10 +209,10 @@ describe('DeviceCache', () => {
 			const Dummy = class extends Error {}
 			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints: vi.fn(() => { throw unknownErr }) }))
-			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn(), errorHandler: (log: any) => log.error('[API] Error [endpoint: refreshDeviceCache]: [object Object]') }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed:', unknownErr)
+			expect(log.error).toHaveBeenCalledWith('[API] Error [endpoint: refreshDeviceCache]: [object Object]')
 			vi.resetModules()
 		})
 
@@ -222,14 +222,14 @@ describe('DeviceCache', () => {
 			const Dummy = class extends Error {}
 			const getAccessPoints = vi.fn(() => { throw new Error('fail') })
 			vi.doMock('../../src/unifi.js', () => ({ getAccessPoints }))
-			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding }))
+			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding, errorHandler: vi.fn() }))
 			vi.doMock('../../src/models/unifiTypes.js', () => ({ UnifiAuthError: Dummy, UnifiApiError: Dummy, UnifiNetworkError: Dummy }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
 			for (const accessory of accessories) {
 				expect(markAccessoryNotResponding).toHaveBeenCalledWith(platform, accessory)
 			}
-			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: fail')
+			expect(log.error).toHaveBeenCalledTimes(0)
 			vi.resetModules()
 		})
 	})

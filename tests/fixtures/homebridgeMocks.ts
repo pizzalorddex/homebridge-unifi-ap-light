@@ -46,6 +46,8 @@ export const mockLogger = {
 	error: vi.fn(),
 	warn: vi.fn(),
 	info: vi.fn(),
+	success: vi.fn(),
+	log: vi.fn(),
 }
 
 export const mockLoggerFull = {

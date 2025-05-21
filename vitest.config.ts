@@ -14,6 +14,7 @@ export default defineConfig({
 				'src/**/index.ts',      // all subfolders
 				'**/src/index.ts',      // absolute/relative path quirks
 				'**/src/**/index.ts',   // absolute/relative path quirks
+				'dist/**',
 				'.eslintrc.js',
 			],
 		},

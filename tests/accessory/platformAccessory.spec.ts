@@ -3,12 +3,14 @@ import { UniFiAP } from '../../src/accessory/platformAccessory.js'
 import { UnifiAPLight } from '../../src/platform.js'
 import { PlatformAccessory } from 'homebridge'
 import { markAccessoryNotResponding } from '../../src/utils/errorHandler.js'
+import { resetErrorState } from '../../src/utils/errorLogManager.js'
 import { mockService, mockAccessory, sharedMockCache, mockPlatform } from '../fixtures/homebridgeMocks'
 
 describe('UniFiAP Accessory', () => {
 	let accessory: UniFiAP
 
 	beforeEach(() => {
+		resetErrorState()
 		vi.clearAllMocks()
 		sharedMockCache.getDeviceById.mockReturnValue(mockAccessory.context.accessPoint)
 		sharedMockCache.getAllDevices.mockReturnValue([mockAccessory.context.accessPoint])
@@ -133,7 +135,7 @@ describe('UniFiAP Accessory', () => {
 		it('setOn: should log error and not update cache on non-200 response', async () => {
 			mockPlatform.sessionManager.request.mockResolvedValueOnce({ status: 500 })
 			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('Unexpected response status'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[Accessory] Failed to set LED state for Test AP (ap1): Unexpected response status 500')
 			expect(sharedMockCache.setDevices).not.toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ led_override: 'on' })]))
 		})
 
@@ -142,14 +144,14 @@ describe('UniFiAP Accessory', () => {
 			Object.setPrototypeOf(error, { constructor: { name: 'UnifiAuthError' } })
 			mockPlatform.sessionManager.request.mockRejectedValueOnce(error)
 			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalled()
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: [object Error]')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
 		it('setOn: should handle generic error and set Not Responding', async () => {
 			mockPlatform.sessionManager.request.mockRejectedValueOnce({ message: 'fail' })
 			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('fail'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: fail')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
@@ -173,7 +175,7 @@ describe('UniFiAP Accessory', () => {
 			class UnifiApiError extends Error { constructor(msg: string) { super(msg) } }
 			mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiApiError('api error'))
 			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('api error'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: api error')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
@@ -181,7 +183,7 @@ describe('UniFiAP Accessory', () => {
 			class UnifiNetworkError extends Error { constructor(msg: string) { super(msg) } }
 			mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiNetworkError('network error'))
 			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('network error'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: network error')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
@@ -219,23 +221,35 @@ describe('UniFiAP Accessory', () => {
 		it('getOn: should log error and set Not Responding if device not in cache', async () => {
 			sharedMockCache.getDeviceById.mockImplementation(() => { return undefined as any })
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('not found in cache'))
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn]: Device not found in cache')
+			// Accept either one or two calls, but check the first call is the expected error
+			const calls = mockPlatform.log.error.mock.calls
+			expect(calls[0][0]).toBe('[API] Error [site: default, endpoint: getOn]: Device not found in cache')
 		})
 
 		it('getOn: should log error and set Not Responding if ledSettings.enabled is undefined', async () => {
 			const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: {} }
 			sharedMockCache.getDeviceById.mockReturnValue(udm)
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('enabled'))
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn]: \'enabled\' property in \'ledSettings\' is undefined')
+		})
+
+		it('getOn: should log error and set Not Responding if udm has no ledSettings', async () => {
+			const udm = { ...mockAccessory.context.accessPoint, type: 'udm' }
+			sharedMockCache.getDeviceById.mockReturnValue(udm)
+			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
+			// Should log twice: once for missing 'enabled', once for the thrown error in catch
+			const calls = mockPlatform.log.error.mock.calls
+			expect(calls.length).toBe(2)
+			expect(calls[0][0]).toBe('[API] Error [site: default, endpoint: getOn]: \'enabled\' property in \'ledSettings\' is undefined')
+			expect(calls[1][0]).toContain('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]')
 		})
 
 		it('getOn: should handle UnifiAuthError and set Not Responding', async () => {
 			class UnifiAuthError extends Error { constructor(msg: string) { super(msg) } }
 			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiAuthError('auth error') })
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('auth error'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]: auth error')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
@@ -243,7 +257,7 @@ describe('UniFiAP Accessory', () => {
 			class UnifiApiError extends Error { constructor(msg: string) { super(msg) } }
 			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiApiError('api error') })
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('api error'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]: api error')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
@@ -251,7 +265,7 @@ describe('UniFiAP Accessory', () => {
 			class UnifiNetworkError extends Error { constructor(msg: string) { super(msg) } }
 			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiNetworkError('network error') })
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('network error'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]: network error')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 
@@ -259,7 +273,7 @@ describe('UniFiAP Accessory', () => {
 			const udm = { ...mockAccessory.context.accessPoint, type: 'udm' }
 			sharedMockCache.getDeviceById.mockReturnValue(udm)
 			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith(expect.stringContaining('enabled'))
+			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn]: \'enabled\' property in \'ledSettings\' is undefined')
 			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
 		})
 

@@ -3,6 +3,7 @@ import { SessionManager } from '../utils/sessionManager.js'
 import { UnifiApiHelper } from '../api/unifiApiHelper.js'
 import { getAccessPoints } from '../unifi.js'
 import { filterRelevantAps } from '../utils/apFilter.js'
+import { errorHandler } from '../utils/errorHandler.js'
 
 /**
  * Handles platform recovery actions such as immediate re-authentication and device cache refresh.
@@ -22,7 +23,7 @@ export class RecoveryManager {
    * @returns {Promise<void>}
    */
 	public async forceImmediateCacheRefresh(): Promise<void> {
-		this.log.info('[Recovery] Immediate cache refresh requested (triggered by accessory error).')
+		errorHandler(this.log, { name: 'RecoveryInfo', message: 'Immediate cache refresh requested (triggered by accessory error).' }, { endpoint: 'forceImmediateCacheRefresh' })
 		try {
 			await this.sessionManager.authenticate()
 
@@ -37,7 +38,7 @@ export class RecoveryManager {
 				}
 			}
 			if (!resolvedSites.length) {
-				this.log.error('[Recovery] No valid sites resolved. Aborting recovery cache refresh.')
+				errorHandler(this.log, { name: 'RecoveryError', message: 'No valid sites resolved. Aborting recovery cache refresh.' }, { endpoint: 'forceImmediateCacheRefresh' })
 				return
 			}
 			const apiHelper = this.sessionManager.getApiHelper()
@@ -56,7 +57,7 @@ export class RecoveryManager {
 			// Only keep devices that are truly ready
 			const readyDevices = relevantAps.filter(UnifiApiHelper.isDeviceReady)
 			if (!readyDevices.length) {
-				this.log.warn('[Recovery] No relevant UniFi APs are ready after controller recovery. Will not update cache or accessories.')
+				errorHandler(this.log, { name: 'RecoveryWarn', message: 'No relevant UniFi APs are ready after controller recovery. Will not update cache or accessories.' }, { endpoint: 'forceImmediateCacheRefresh' })
 				return
 			}
 			// Update the device cache with only ready devices
@@ -67,9 +68,9 @@ export class RecoveryManager {
 				await this.refreshDeviceCache()
 				this.log.debug('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 			}
-			this.log.info('[Recovery] Immediate cache refresh completed successfully.')
+			errorHandler(this.log, { name: 'RecoveryInfo', message: 'Immediate cache refresh completed successfully.' }, { endpoint: 'forceImmediateCacheRefresh' })
 		} catch (err) {
-			this.log.error('[Recovery] Immediate cache refresh failed:', err)
+			errorHandler(this.log, { name: 'RecoveryError', message: 'Immediate cache refresh failed', error: err instanceof Error ? err.message : String(err) }, { endpoint: 'forceImmediateCacheRefresh' })
 		}
 	}
 }

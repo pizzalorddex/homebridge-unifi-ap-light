@@ -118,7 +118,11 @@ export class UniFiAP {
 		try {
 			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 			if (!cached) {
-				this.platform.log.error(`[Accessory] Device ${this.accessPoint.name} (${this.accessPoint._id}) not found in cache.`)
+				errorHandler(
+					this.platform.log,
+					{ name: 'DeviceCacheError', message: 'Device not found in cache' },
+					{ site: this.accessPoint.site, endpoint: 'getOn' }
+				)
 				markAccessoryNotResponding(this.platform, this.accessory)
 				await this.platform.forceImmediateCacheRefresh()
 				throw new Error('Not Responding')
@@ -129,7 +133,11 @@ export class UniFiAP {
 					this.platform.log.debug(`[Accessory] Retrieved LED state for ${cached.name} (${cached._id}): ${isOn ? 'on' : 'off'}`)
 					return isOn
 				} else {
-					this.platform.log.error(`[Accessory] The 'enabled' property in 'ledSettings' is undefined for ${cached.name} (${cached._id})`)
+					errorHandler(
+						this.platform.log,
+						{ name: 'DeviceCacheError', message: '\'enabled\' property in \'ledSettings\' is undefined' },
+						{ site: this.accessPoint.site, endpoint: 'getOn' }
+					)
 					markAccessoryNotResponding(this.platform, this.accessory)
 					throw new Error('Not Responding')
 				}
