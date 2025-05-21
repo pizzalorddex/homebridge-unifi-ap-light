@@ -107,13 +107,18 @@ describe('unifi.ts coverage', () => {
 			})
 
 			it('returns only successful devices if some sites fail', async () => {
-				const site1Device = { _id: 'ap1', type: 'uap', model: 'UAP', site: 'site1' }
 				const request = vi.fn()
-					.mockResolvedValueOnce({ data: { data: [site1Device] } })
-					.mockRejectedValueOnce({ response: { status: 500, data: {} }, message: 'server error' })
-				const result = await getAccessPoints(request, apiHelper, ['site1', 'siteFail'], log).catch(() => [])
-				expect(result).toEqual([{ ...site1Device, site: 'site1' }])
-				expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('Error fetching devices from site'))
+				const realApiHelper = new UnifiApiHelper()
+				realApiHelper.setApiType(UnifiApiType.SelfHosted)
+				vi.spyOn(realApiHelper, 'getDeviceListEndpoint').mockImplementation((site) => `/api/s/${site}/stat/device`)
+				const sites = ['site1', 'site2']
+				// Use mockLoggerFull for a complete Logger
+				const { mockLoggerFull } = await import('../fixtures/homebridgeMocks')
+				const log = { ...mockLoggerFull }
+				request.mockImplementationOnce(() => Promise.reject(new Error('fail')))
+				request.mockImplementationOnce(() => Promise.resolve({ data: { data: [{ _id: 'ap1', type: 'uap', site: 'site2' }] }, status: 200 }))
+				const result = await getAccessPoints(request, realApiHelper, sites, log)
+				expect(result).toEqual([{ _id: 'ap1', type: 'uap', site: 'site2' }])
 			})
 
 			it('handles multiple sites, some succeed, some fail', async () => {

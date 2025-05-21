@@ -145,17 +145,16 @@ describe('discoverDevices', () => {
 			expect(createAndRegisterAccessory).not.toHaveBeenCalled()
 		})
 
-		it('warns and aborts if no valid sites', async () => {
-			platform.config.sites = ['invalid']
+		it('should log error if no valid sites', async () => {
 			platform.sessionManager.getSiteName = vi.fn(() => undefined)
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('No valid sites resolved. Aborting discovery.')
+			expect(platform.log.error).toHaveBeenCalledWith('[Discovery] No valid sites resolved. Aborting discovery.')
 		})
 
-		it('warns if no access points discovered', async () => {
+		it('should log warning if no access points discovered', async () => {
 			getAccessPoints.mockResolvedValue([])
 			await discoverDevices(platform)
-			expect(platform.log.warn).toHaveBeenCalledWith('No relevant access points discovered. Check your site configuration, include/exclude settings, and permissions.')
+			expect(platform.log.warn).toHaveBeenCalledWith('[Discovery] No relevant access points discovered. Check your site configuration, include/exclude settings, and permissions.')
 		})
 	})
 
@@ -170,7 +169,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Authentication error [endpoint: authentication (device discovery)]: fail')
+			expect(platform.log.error).toHaveBeenCalledWith('[API] Authentication error [endpoint: authentication (device discovery)]: fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -183,7 +182,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: authentication (device discovery)]: fail')
+			expect(platform.log.error).toHaveBeenCalledWith('[API] Error [endpoint: authentication (device discovery)]: fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -196,7 +195,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: authentication (device discovery)]: authfailstr')
+			expect(platform.log.error).toHaveBeenCalledWith('[API] Error [endpoint: authentication (device discovery)]: authfailstr')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -211,7 +210,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('API error [endpoint: device discovery]: api fail')
+			expect(platform.log.error).toHaveBeenCalledWith('[API] API error [endpoint: device discovery]: api fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -226,7 +225,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Network error [endpoint: device discovery]: net fail')
+			expect(platform.log.error).toHaveBeenCalledWith('[API] Network error [endpoint: device discovery]: net fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -239,7 +238,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: device discovery]: fail')
+			expect(platform.log.error).toHaveBeenCalledWith('[API] Error [endpoint: device discovery]: fail')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})
@@ -252,7 +251,7 @@ describe('discoverDevices', () => {
 				getService: vi.fn(() => ({ updateCharacteristic: vi.fn() })),
 			}]
 			await discoverDevices(platform)
-			expect(platform.log.error).toHaveBeenCalledWith('Error [endpoint: device discovery]: failstr')
+			expect(platform.log.error).toHaveBeenCalledWith('[API] Error [endpoint: device discovery]: failstr')
 			expect(markAccessoryNotResponding).toHaveBeenCalled()
 			expect(platform.getDeviceCache().clear).toHaveBeenCalled()
 		})

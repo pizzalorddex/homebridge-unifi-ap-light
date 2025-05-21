@@ -24,13 +24,12 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
 	const accessory = new platform.api.platformAccessory(accessPoint.name, uuid)
 	accessory.context.accessPoint = accessPoint
 	platform.accessories.push(accessory)
-	const siteInfo = accessPoint.site ? `site: ${accessPoint.site}` : ''
-	platform.log.info(`Adding new accessory: ${accessPoint.name} (${accessPoint._id} ${siteInfo})`)
+	platform.log.info(`[Accessory] Added new accessory: ${accessPoint.name} (${accessPoint._id})`)
 	new UniFiAP(platform, accessory)
 	try {
 		platform.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory])
 	} catch (err) {
-		platform.log.error(`Error during registerPlatformAccessories for ${accessPoint.name} (${accessPoint._id} ${siteInfo}): ${(err as Error).message}`)
+		platform.log.error(`[Accessory] Error during registerPlatformAccessories for ${accessPoint.name} (${accessPoint._id}): ${(err as Error).message}`)
 	}
 	return accessory
 }
@@ -43,8 +42,7 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
  * @param existingAccessory - The cached PlatformAccessory
  */
 export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, existingAccessory: PlatformAccessory): void {
-	const siteInfo = accessPoint.site ? `site: ${accessPoint.site}` : ''
-	platform.log.info(`[Discovery] Matched device to cached accessory: ${existingAccessory.displayName} (${accessPoint._id} ${siteInfo})`)
+	platform.log.info(`[Discovery] Matched device to cached accessory: ${existingAccessory.displayName} (${accessPoint._id})`)
 	new UniFiAP(platform, existingAccessory)
 }
 
@@ -56,12 +54,11 @@ export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevic
  */
 export function removeAccessory(platform: UnifiAPLight, accessory: PlatformAccessory): void {
 	const ap = accessory.context.accessPoint
-	const siteInfo = ap?.site ? `site: ${ap.site}` : ''
-	platform.log.info(`Removing accessory from cache due to exclusion settings: ${accessory.displayName} (${ap?._id} ${siteInfo})`)
+	platform.log.info(`[Exclusion] Removing accessory from cache: ${accessory.displayName} (${ap?._id})`)
 	try {
 		platform.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory])
 	} catch (err) {
-		platform.log.error(`Error during unregisterPlatformAccessories for ${accessory.displayName} (${ap?._id} ${siteInfo}): ${(err as Error).message}`)
+		platform.log.error(`[Exclusion] Error during unregisterPlatformAccessories for ${accessory.displayName} (${ap?._id}): ${(err as Error).message}`)
 	}
 	const idx = platform.accessories.findIndex(acc => acc.UUID === accessory.UUID)
 	if (idx !== -1) {

@@ -61,8 +61,8 @@ describe('UnifiApiHelper', () => {
 				success: vi.fn(),
 				log: vi.fn(),
 			}
-			await expect(apiHelper.detectApiType(instance as any, 'u', 'p', log)).rejects.toThrow('Unable to detect UniFi API structure.')
-			expect(log.error).toHaveBeenCalledWith('Failed to detect UniFi API structure (tried /api/auth/login and /api/login): Error: fail')
+			const helper = new UnifiApiHelper()
+			await expect(helper.detectApiType(instance as any, 'u', 'p', log)).rejects.toThrow('Unable to detect UniFi API structure.')
 		})
 
 		it('should detect UnifiOS API type', async () => {

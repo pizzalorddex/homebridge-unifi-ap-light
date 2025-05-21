@@ -156,6 +156,6 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 		this.refreshTimer = setInterval(() => {
 			DeviceCache.refreshDeviceCache(this)
 		}, this.refreshIntervalMs)
-		this.log.info(`Device cache refresh timer started (every ${this.refreshIntervalMs / 60000} minutes).`)
+		this.log.debug(`Device cache refresh timer started (every ${this.refreshIntervalMs / 60000} minutes).`)
 	}
 }

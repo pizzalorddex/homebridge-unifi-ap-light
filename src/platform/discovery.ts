@@ -40,11 +40,11 @@ export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
 			if (internal) {
 				resolvedSites.push(internal)
 			} else {
-				platform.log.warn(`Site "${site}" is not recognized by the UniFi controller.`)
+				platform.log.warn(`[Discovery] Site "${site}" is not recognized by the UniFi controller.`)
 			}
 		}
 		if (!resolvedSites.length) {
-			platform.log.error('No valid sites resolved. Aborting discovery.')
+			platform.log.error('[Discovery] No valid sites resolved. Aborting discovery.')
 			return
 		}
 
@@ -64,7 +64,7 @@ export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
 		// Update the device cache
 		platform.getDeviceCache().setDevices(relevantAps)
 		if (!relevantAps.length) {
-			platform.log.warn('No relevant access points discovered. Check your site configuration, include/exclude settings, and permissions.')
+			platform.log.warn('[Discovery] No relevant access points discovered. Check your site configuration, include/exclude settings, and permissions.')
 		}
 
 		// Register, restore, or remove Homebridge accessories based on discovered devices

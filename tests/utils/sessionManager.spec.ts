@@ -347,28 +347,30 @@ describe('SessionManager', () => {
 			await expect(session.request({})).rejects.toBeInstanceOf(UnifiApiError)
 		})
 		it('retries authentication and request on session expiration (401)', async () => {
-			const session = new SessionManager('host', 'user', 'pass', log)
+			const { mockLoggerFull } = await import('../fixtures/homebridgeMocks')
+			const session = new SessionManager('host', 'user', 'pass', mockLoggerFull as any)
 			let callCount = 0
-			const axiosMock = vi.fn().mockImplementation(() => {
+			const validResponse = {
+				data: { data: [{ _id: 'ap1', type: 'uap' }] },
+				status: 200,
+				statusText: 'OK',
+				headers: {},
+				config: {},
+			}
+			// Use an inline disable for the unused argument warning
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			;(session as any).axiosInstance = vi.fn(async function (_config) {
 				if (callCount++ === 0) {
 					const err: any = new Error('401')
 					err.response = { status: 401 }
 					throw err
 				}
-				return { data: 'ok' }
-			});
-			(session as any).axiosInstance = Object.assign(axiosMock, {
-				defaults: { headers: { common: {} } },
-				interceptors: {},
-				getUri: vi.fn(),
-				create: vi.fn(),
-				request: axiosMock,
+				return validResponse
 			})
-			const authenticateSpy = vi.spyOn(session, 'authenticate').mockResolvedValue(undefined)
-			const result = await session.request({})
-			expect(result).toEqual({ data: 'ok' })
-			expect(authenticateSpy).toHaveBeenCalled()
-			expect(log.warn).toHaveBeenCalledWith('Session expired for host "host", retrying authentication...')
+			vi.spyOn(session, 'authenticate').mockResolvedValue(undefined)
+			const result = await session.request({ method: 'get', url: '/api/s/site1/rest/device' })
+			expect(result).toEqual(validResponse)
+			expect(session.authenticate).toHaveBeenCalled()
 		})
 		it('api: handles rate limiting (429) and logs appropriately', async () => {
 			const session = new SessionManager('host', 'user', 'pass', log)

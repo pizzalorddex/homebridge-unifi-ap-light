@@ -71,24 +71,25 @@ describe('UniFiAP Accessory', () => {
 		it('should use context accessPoint if device not found in cache (constructor)', () => {
 			const contextDevice = { ...mockAccessory.context.accessPoint, name: 'Context AP', _id: 'context1' }
 			const contextAccessory = { ...mockAccessory, context: { accessPoint: contextDevice } }
-			const platformWithEmptyCache = {
+			const instance = new UniFiAP({
 				...mockPlatform,
 				getDeviceCache: () => ({
 					getDeviceById: vi.fn(() => undefined),
 					getAllDevices: vi.fn(() => []),
 					setDevices: vi.fn(),
 				}),
-			}
-			const instance = new UniFiAP(platformWithEmptyCache as any as UnifiAPLight, contextAccessory as any as PlatformAccessory)
+			} as any as UnifiAPLight, contextAccessory as any as PlatformAccessory)
 			expect(instance.accessPoint).toBe(contextDevice)
 		})
 	})
 
 	describe('AccessoryInformation & Lightbulb Service', () => {
 		it('should log a warning if AccessoryInformation service is missing', () => {
-			const accessoryInfoMissing = { ...mockAccessory, getService: vi.fn((svc) => (svc === mockPlatform.Service.AccessoryInformation ? undefined : mockService)) }
-			new UniFiAP(mockPlatform as any as UnifiAPLight, accessoryInfoMissing as any as PlatformAccessory)
-			expect(mockPlatform.log.warn).toHaveBeenCalledWith('Accessory Information Service not found for Test AP (ap1, site: default)')
+			const contextAccessory = { ...mockAccessory, getService: vi.fn(() => undefined) }
+			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
+			const platformWithLog = { ...mockPlatform, log: logSpy, getDeviceCache: vi.fn(() => ({ getDeviceById: vi.fn(() => undefined) })) }
+			new UniFiAP(platformWithLog as any as UnifiAPLight, contextAccessory as any as PlatformAccessory)
+			expect(logSpy.warn).toHaveBeenCalledWith('[Accessory] Accessory Information Service not found for Test AP (ap1)')
 		})
 
 		it('should set all AccessoryInformation characteristics when service is present', () => {
@@ -303,7 +304,6 @@ describe('UniFiAP Accessory', () => {
 			const service = {
 				updateCharacteristic: vi.fn(),
 				setCharacteristic: vi.fn(),
-				getCharacteristic: vi.fn(() => ({ onSet: vi.fn().mockReturnThis(), onGet: vi.fn().mockReturnThis() })),
 			}
 			const accessoryWithService = { ...mockAccessory, getService: vi.fn((svc) => svc === mockPlatform.Service.Lightbulb ? service : undefined) }
 			markAccessoryNotResponding(mockPlatform as any, accessoryWithService as any)
@@ -315,7 +315,7 @@ describe('UniFiAP Accessory', () => {
 			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
 			const platformWithLog = { ...mockPlatform, log: logSpy }
 			markAccessoryNotResponding(platformWithLog as any, accessoryNoService as any)
-			expect(logSpy.warn).toHaveBeenCalledWith('Accessory Information Service not found for Test AP (ap1, site: default)')
+			expect(logSpy.warn).toHaveBeenCalledWith('[Accessory] Accessory Information Service not found for Test AP (ap1)')
 		})
 
 		it('markNotRespondingForAccessory: should set Not Responding if service exists', () => {
@@ -336,9 +336,9 @@ describe('UniFiAP Accessory', () => {
 				context: { accessPoint: { ...mockAccessory.context.accessPoint, _id: 'ap2', name: 'NoServiceAP', site: 'default' } },
 			}
 			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
-			const platformWithLog = { ...mockPlatform, log: logSpy }
+			const platformWithLog = { ...mockPlatform, log: logSpy, Service: mockPlatform.Service, Characteristic: mockPlatform.Characteristic }
 			markAccessoryNotResponding(platformWithLog as any, accessoryNoService as any)
-			expect(logSpy.warn).toHaveBeenCalledWith('Accessory Information Service not found for NoServiceAP (ap2, site: default)')
+			expect(logSpy.warn).toHaveBeenCalledWith('[Accessory] Accessory Information Service not found for NoServiceAP (ap2)')
 		})
 	})
 })

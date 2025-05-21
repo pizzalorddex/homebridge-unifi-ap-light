@@ -90,7 +90,7 @@ describe('UnifiAPLight Platform', () => {
 		;(platform as any).startDeviceCacheRefreshTimer()
 		expect(clearSpy).toHaveBeenCalled()
 		expect(setSpy).toHaveBeenCalled()
-		expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Device cache refresh timer started'))
+		expect(mockLogger.debug).toHaveBeenCalledWith(expect.stringContaining('Device cache refresh timer started'))
 		clearSpy.mockRestore()
 		setSpy.mockRestore()
 	})

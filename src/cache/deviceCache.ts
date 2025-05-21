@@ -69,7 +69,7 @@ export class DeviceCache {
 				}
 			}
 			if (!resolvedSites.length) {
-				platform.log.error('No valid sites resolved. Aborting device cache refresh.')
+				platform.log.error('[Cache Refresh] No valid sites resolved. Aborting device cache refresh.')
 				return
 			}
 			let accessPoints = []
@@ -82,7 +82,7 @@ export class DeviceCache {
 					platform.log
 				)
 			} catch (err) {
-				platform.log.warn(`Device cache refresh failed, attempting re-authentication... Error: ${err instanceof Error ? err.message : String(err)}`)
+				platform.log.warn(`[Cache Refresh] Device cache refresh failed, attempting re-authentication... Error: ${err instanceof Error ? err.message : String(err)}`)
 				await platform.sessionManager.authenticate()
 				const { getAccessPoints } = await import('../unifi.js')
 				accessPoints = await getAccessPoints(
@@ -93,19 +93,19 @@ export class DeviceCache {
 				)
 			}
 			platform.getDeviceCache().setDevices(accessPoints)
-			platform.log.info(`Device cache refreshed. ${accessPoints.length} devices currently available.`)
+			platform.log.info(`[Cache Refresh] Device cache refreshed. ${accessPoints.length} devices currently available.`)
 		} catch (err) {
 			const { UnifiAuthError, UnifiApiError, UnifiNetworkError } = await import('../models/unifiTypes.js')
 			if (err instanceof UnifiAuthError) {
-				platform.log.error('Device cache refresh failed: Failed to detect UniFi API structure during authentication')
+				platform.log.error('[Cache Refresh] Device cache refresh failed: Failed to detect UniFi API structure during authentication')
 			} else if (err instanceof UnifiApiError || err instanceof UnifiNetworkError) {
-				platform.log.error(`Device cache refresh failed: ${err.message}`)
+				platform.log.error(`[Cache Refresh] Device cache refresh failed: ${err.message}`)
 			} else if (err instanceof Error) {
-				platform.log.error(`Device cache refresh failed: ${err.message}`)
+				platform.log.error(`[Cache Refresh] Device cache refresh failed: ${err.message}`)
 			} else if (typeof err === 'string') {
-				platform.log.error('Device cache refresh failed:', err)
+				platform.log.error('[Cache Refresh] Device cache refresh failed:', err)
 			} else {
-				platform.log.error('Device cache refresh failed:', err)
+				platform.log.error('[Cache Refresh] Device cache refresh failed:', err)
 			}
 			const { markAccessoryNotResponding } = await import('../utils/errorHandler.js')
 			for (const accessory of platform.accessories) {

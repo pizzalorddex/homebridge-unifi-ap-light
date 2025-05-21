@@ -22,7 +22,7 @@ export class RecoveryManager {
    * @returns {Promise<void>}
    */
 	public async forceImmediateCacheRefresh(): Promise<void> {
-		this.log.info('Immediate cache refresh requested (triggered by accessory error).')
+		this.log.info('[Recovery] Immediate cache refresh requested (triggered by accessory error).')
 		try {
 			await this.sessionManager.authenticate()
 
@@ -37,7 +37,7 @@ export class RecoveryManager {
 				}
 			}
 			if (!resolvedSites.length) {
-				this.log.error('No valid sites resolved. Aborting recovery cache refresh.')
+				this.log.error('[Recovery] No valid sites resolved. Aborting recovery cache refresh.')
 				return
 			}
 			const apiHelper = this.sessionManager.getApiHelper()
@@ -56,20 +56,20 @@ export class RecoveryManager {
 			// Only keep devices that are truly ready
 			const readyDevices = relevantAps.filter(UnifiApiHelper.isDeviceReady)
 			if (!readyDevices.length) {
-				this.log.warn('No relevant UniFi APs are ready after controller recovery. Will not update cache or accessories.')
+				this.log.warn('[Recovery] No relevant UniFi APs are ready after controller recovery. Will not update cache or accessories.')
 				return
 			}
 			// Update the device cache with only ready devices
 			if (platform && typeof platform.getDeviceCache === 'function') {
 				platform.getDeviceCache().setDevices(readyDevices)
-				this.log.info(`Device cache refreshed after recovery. ${readyDevices.length} devices are ready and available.`)
+				this.log.info(`[Cache Refresh] Device cache refreshed after recovery. ${readyDevices.length} devices are ready and available.`)
 			} else {
 				await this.refreshDeviceCache()
-				this.log.info('Device cache refreshed after recovery (fallback to full cache refresh).')
+				this.log.info('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 			}
-			this.log.info('Immediate cache refresh completed successfully.')
+			this.log.info('[Recovery] Immediate cache refresh completed successfully.')
 		} catch (err) {
-			this.log.error('Immediate cache refresh failed:', err)
+			this.log.error('[Recovery] Immediate cache refresh failed:', err)
 		}
 	}
 }

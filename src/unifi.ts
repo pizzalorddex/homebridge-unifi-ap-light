@@ -64,7 +64,7 @@ export async function getAccessPoints(
 					...device,
 					site, // tag the device with its site name
 				}))
-				log.debug(`Found ${devices.length} devices in site "${site}" via endpoint "${endpoint}"`)
+				log.debug(`[API] Found ${devices.length} devices via endpoint "${endpoint}"`)
 				allDevices.push(...devices)
 				siteSuccess = true
 			} else {
@@ -80,17 +80,17 @@ export async function getAccessPoints(
 			// Special handling for NoSiteContext error
 			const data = axiosError.response?.data as { meta?: { msg?: string } }
 			if (data?.meta?.msg === 'api.err.NoSiteContext') {
-				log.error(`api.err.NoSiteContext: Site "${site}" is not recognized by the controller [endpoint: ${endpoint}]`)
+				log.error(`[API] api.err.NoSiteContext: Site "${site}" is not recognized by the controller [endpoint: ${endpoint}]`)
 				continue
 			}
 			if (status === 404) {
-				log.warn(`Endpoint not found: ${endpoint} for site "${site}" (API structure may be incorrect or changed).`)
+				log.warn(`[API] Endpoint not found: ${endpoint} (API structure may be incorrect or changed).`)
 				continue
 			}
 			errorHandler(log, error, { site, endpoint })
 		}
 		if (!siteSuccess) {
-			log.warn(`Error fetching devices from site "${site}" [endpoint: ${endpoint}]`)
+			log.warn(`[API] Error fetching devices [endpoint: ${endpoint}]`)
 		}
 	}
 	if (filterRelevantAps(allDevices).length === 0) {
@@ -125,7 +125,7 @@ export async function getDeviceByMac(
 			return response.data.data[0]
 		}
 	} catch (err) {
-		log.error(`Failed to fetch device by MAC (${mac}) from site ${site}: ${err}`)
+		log.error(`[API] Failed to fetch device by MAC (${mac}): ${err}`)
 	}
 	return undefined
 }

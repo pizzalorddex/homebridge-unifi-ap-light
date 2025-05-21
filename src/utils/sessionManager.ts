@@ -39,7 +39,7 @@ export class SessionManager {
 	 * @throws {UnifiAuthError} If authentication or API structure detection fails.
 	 */
 	async authenticate(): Promise<void> {
-		this.log.debug(`Starting authentication for host "${this.host}"...`)
+		this.log.debug(`[Session] Starting authentication for host "${this.host}"...`)
 		let instance: AxiosInstance
 		try {
 			instance = Axios.create({
@@ -98,7 +98,7 @@ export class SessionManager {
 		}
 
 		this.axiosInstance = instance
-		this.log.debug(`Authentication successful for host "${this.host}". API type: ${apiType}`)
+		this.log.debug(`[Session] Authentication successful for host "${this.host}". API type: ${apiType}`)
 		await this.loadSites()
 	}
 
@@ -118,7 +118,7 @@ export class SessionManager {
 		} catch (error) {
 			const axiosError = error as AxiosError
 			if (axiosError.response?.status === 401) {
-				this.log.warn(`Session expired for host "${this.host}", retrying authentication...`)
+				this.log.warn(`[Session] Session expired for host "${this.host}", retrying authentication...`)
 				await this.authenticate()
 				return await this.axiosInstance(config)
 			} else if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ENOTFOUND') {
@@ -155,7 +155,7 @@ export class SessionManager {
 						// If only desc is present, do not map it
 					}
 				}
-				this.log.debug(`Loaded sites from ${url}: ${Array.from(this.siteMap.keys()).join(', ')}`)
+				this.log.debug(`[Site] Loaded sites from ${url}: ${Array.from(this.siteMap.keys()).join(', ')}`)
 			} else {
 				throw new UnifiApiError('Unexpected site list structure', { response })
 			}
@@ -188,9 +188,7 @@ export class SessionManager {
 	getSiteName(friendlyName: string): string | undefined {
 		const internal = this.siteMap.get(friendlyName)
 		if (!internal) {
-			this.log.warn(
-				`Configured site "${friendlyName}" not recognized. Available: ${this.getAvailableSitePairs().join(', ')}`
-			)
+			this.log.warn(`[Site] Configured site "${friendlyName}" not recognized. Available: ${this.getAvailableSitePairs().join(', ')}`)
 		}
 		return internal
 	}

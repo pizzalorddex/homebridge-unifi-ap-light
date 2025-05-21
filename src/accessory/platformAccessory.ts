@@ -31,9 +31,7 @@ export class UniFiAP {
 				const resolved = this.platform.sessionManager.getSiteName(configuredSites[0])
 				fallbackSite = resolved || configuredSites[0] || 'default'
 			}
-			this.platform.log.warn(
-				`Patching missing site for ${this.accessPoint.name} (${this.accessPoint._id}): using "${fallbackSite}"`
-			)
+			this.platform.log.warn(`[Accessory] Patching missing site for ${this.accessPoint.name} (${this.accessPoint._id})`)
 			this.accessPoint.site = fallbackSite
 			this.accessory.context.accessPoint = this.accessPoint
 		}
@@ -46,7 +44,7 @@ export class UniFiAP {
 				.setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessPoint.serial)
 				.setCharacteristic(this.platform.Characteristic.FirmwareRevision, this.accessPoint.version)
 		} else {
-			this.platform.log.warn(`Accessory Information Service not found for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site})`)
+			this.platform.log.warn(`[Accessory] Accessory Information Service not found for ${this.accessPoint.name} (${this.accessPoint._id})`)
 		}
 
 		this.service =
@@ -80,7 +78,7 @@ export class UniFiAP {
 				data: data,
 			})
 			if (response.status === 200) {
-				this.platform.log.debug(`Successfully set LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}) to ${value ? 'on' : 'off'}.`)
+				this.platform.log.debug(`[Accessory] Successfully set LED state for ${this.accessPoint.name} (${this.accessPoint._id}) to ${value ? 'on' : 'off'}.`)
 				// Update cache
 				if (isUdmDevice && this.accessPoint.ledSettings) {
 					this.accessPoint.ledSettings.enabled = Boolean(value)
@@ -93,7 +91,7 @@ export class UniFiAP {
 				])
 				return
 			} else {
-				this.platform.log.error(`Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}): Unexpected response status ${response.status}`)
+				this.platform.log.error(`[Accessory] Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}): Unexpected response status ${response.status}`)
 				// Do not update cache on error
 			}
 		} catch (error) {
@@ -116,11 +114,11 @@ export class UniFiAP {
 	 * @returns Promise<CharacteristicValue> The current state of the accessory.
 	 */
 	async getOn(): Promise<CharacteristicValue> {
-		this.platform.log.debug(`HomeKit GET called for ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site})`)
+		this.platform.log.debug(`[Accessory] HomeKit GET called for ${this.accessPoint.name} (${this.accessPoint._id})`)
 		try {
 			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 			if (!cached) {
-				this.platform.log.error(`Device ${this.accessPoint.name} (${this.accessPoint._id}, site: ${this.accessPoint.site}) not found in cache.`)
+				this.platform.log.error(`[Accessory] Device ${this.accessPoint.name} (${this.accessPoint._id}) not found in cache.`)
 				markAccessoryNotResponding(this.platform, this.accessory)
 				await this.platform.forceImmediateCacheRefresh()
 				throw new Error('Not Responding')
@@ -128,16 +126,16 @@ export class UniFiAP {
 			if (cached.type === 'udm') {
 				if (cached.ledSettings && typeof cached.ledSettings.enabled !== 'undefined') {
 					const isOn = cached.ledSettings.enabled
-					this.platform.log.debug(`Retrieved LED state for ${cached.name} (${cached._id}, site: ${cached.site}): ${isOn ? 'on' : 'off'}`)
+					this.platform.log.debug(`[Accessory] Retrieved LED state for ${cached.name} (${cached._id}): ${isOn ? 'on' : 'off'}`)
 					return isOn
 				} else {
-					this.platform.log.error(`The 'enabled' property in 'ledSettings' is undefined for ${cached.name} (${cached._id}, site: ${cached.site})`)
+					this.platform.log.error(`[Accessory] The 'enabled' property in 'ledSettings' is undefined for ${cached.name} (${cached._id})`)
 					markAccessoryNotResponding(this.platform, this.accessory)
 					throw new Error('Not Responding')
 				}
 			} else {
 				const isOn = cached.led_override === 'on'
-				this.platform.log.debug(`Retrieved LED state for ${cached.name} (${cached._id}, site: ${cached.site}): ${isOn ? 'on' : 'off'}`)
+				this.platform.log.debug(`[Accessory] Retrieved LED state for ${cached.name} (${cached._id}): ${isOn ? 'on' : 'off'}`)
 				return isOn
 			}
 		} catch (error) {

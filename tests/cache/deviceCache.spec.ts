@@ -128,7 +128,7 @@ describe('DeviceCache', () => {
 		it('logs error and returns if no valid sites', async () => {
 			platform.config.sites = ['invalid']
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('No valid sites resolved. Aborting device cache refresh.')
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] No valid sites resolved. Aborting device cache refresh.')
 			expect(setDevices).not.toHaveBeenCalled()
 		})
 
@@ -141,7 +141,7 @@ describe('DeviceCache', () => {
 			await DeviceCache.refreshDeviceCache(platform)
 			expect(getAccessPoints).toHaveBeenCalled()
 			expect(setDevices).toHaveBeenCalledWith(data)
-			expect(log.info).toHaveBeenCalledWith(`Device cache refreshed. ${data.length} devices currently available.`)
+			expect(log.info).toHaveBeenCalledWith(`[Cache Refresh] Device cache refreshed. ${data.length} devices currently available.`)
 			vi.resetModules()
 		})
 
@@ -165,7 +165,7 @@ describe('DeviceCache', () => {
 			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: Failed to detect UniFi API structure during authentication')
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: Failed to detect UniFi API structure during authentication')
 			vi.resetModules()
 		})
 
@@ -176,7 +176,7 @@ describe('DeviceCache', () => {
 			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: apifail')
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: apifail')
 			vi.resetModules()
 		})
 
@@ -187,7 +187,7 @@ describe('DeviceCache', () => {
 			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: netfail')
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: netfail')
 			vi.resetModules()
 		})
 
@@ -198,7 +198,7 @@ describe('DeviceCache', () => {
 			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: fail')
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: fail')
 			vi.resetModules()
 		})
 
@@ -209,7 +209,7 @@ describe('DeviceCache', () => {
 			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed:', 'failstr')
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed:', 'failstr')
 			vi.resetModules()
 		})
 
@@ -221,7 +221,7 @@ describe('DeviceCache', () => {
 			vi.doMock('../../src/utils/errorHandler.js', () => ({ markAccessoryNotResponding: vi.fn() }))
 			const { DeviceCache } = await import('../../src/cache/deviceCache.js')
 			await DeviceCache.refreshDeviceCache(platform)
-			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed:', unknownErr)
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed:', unknownErr)
 			vi.resetModules()
 		})
 
@@ -240,7 +240,7 @@ describe('DeviceCache', () => {
 				expect(markAccessoryNotResponding).toHaveBeenCalledWith(platform, accessory)
 			}
 			expect(clear).toHaveBeenCalled()
-			expect(log.error).toHaveBeenCalledWith('Device cache refresh failed: fail')
+			expect(log.error).toHaveBeenCalledWith('[Cache Refresh] Device cache refresh failed: fail')
 			vi.resetModules()
 		})
 	})

@@ -16,8 +16,7 @@ export function markAccessoryNotResponding(platform: UnifiAPLight, accessory: Pl
 		const ap = accessory.context?.accessPoint
 		const name = ap?.name || accessory.displayName || 'Unknown'
 		const id = ap?._id || 'unknown'
-		const site = ap?.site || 'unknown'
-		platform.log.warn(`Accessory Information Service not found for ${name} (${id}, site: ${site})`)
+		platform.log.warn(`[Accessory] Accessory Information Service not found for ${name} (${id})`)
 	}
 }
 
@@ -31,7 +30,7 @@ export function markThisAccessoryNotResponding(instance: { service: any, platfor
 			new Error('Not Responding')
 		)
 	} else {
-		instance.platform.log.warn(`Accessory Information Service not found for ${instance.accessPoint.name} (${instance.accessPoint._id}, site: ${instance.accessPoint.site})`)
+		instance.platform.log.warn(`[Accessory] Accessory Information Service not found for ${instance.accessPoint.name} (${instance.accessPoint._id})`)
 	}
 }
 
@@ -61,29 +60,29 @@ export function errorHandler(
 		const hasMessage = Object.prototype.hasOwnProperty.call(error, 'message')
 		const message = hasMessage ? (error as any).message : String(error)
 		if (name === 'UnifiApiError') {
-			log.error(`API error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
+			log.error(`[API] API error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 			return
 		}
 		if (name === 'UnifiAuthError') {
-			log.error(`Authentication error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
+			log.error(`[API] Authentication error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 			return
 		}
 		if (name === 'UnifiNetworkError') {
-			log.error(`Network error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
+			log.error(`[API] Network error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 			return
 		}
 		if (name === 'UnifiConfigError') {
-			log.error(`Config error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
+			log.error(`[API] Config error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 			return
 		}
 	}
 
 	// Fallback for generic errors
 	if (error instanceof Error) {
-		log.error(`Error${ctx ? ' [' + ctx + ']' : ''}: ${error.message}`)
+		log.error(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${error.message}`)
 	} else if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
-		log.error(`Error${ctx ? ' [' + ctx + ']' : ''}: ${(error as any).message}`)
+		log.error(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${(error as any).message}`)
 	} else {
-		log.error(`Error${ctx ? ' [' + ctx + ']' : ''}: ${String(error)}`)
+		log.error(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${String(error)}`)
 	}
 }
