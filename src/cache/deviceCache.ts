@@ -93,7 +93,7 @@ export class DeviceCache {
 				)
 			}
 			platform.getDeviceCache().setDevices(accessPoints)
-			platform.log.info(`[Cache Refresh] Device cache refreshed. ${accessPoints.length} devices currently available.`)
+			platform.log.debug(`[Cache Refresh] Device cache refreshed. ${accessPoints.length} devices currently available.`)
 		} catch (err) {
 			const { UnifiAuthError, UnifiApiError, UnifiNetworkError } = await import('../models/unifiTypes.js')
 			if (err instanceof UnifiAuthError) {

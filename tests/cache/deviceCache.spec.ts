@@ -95,7 +95,7 @@ describe('DeviceCache', () => {
 		let accessories: any
 
 		beforeEach(() => {
-			log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() }
+			log = { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }
 			sessionManager = {
 				authenticate: vi.fn().mockResolvedValue(undefined),
 				getSiteName: vi.fn(site => site === 'valid' ? 'internal' : undefined),
@@ -132,7 +132,7 @@ describe('DeviceCache', () => {
 			await DeviceCache.refreshDeviceCache(platform)
 			expect(getAccessPoints).toHaveBeenCalled()
 			expect(setDevices).toHaveBeenCalledWith(data)
-			expect(log.info).toHaveBeenCalledWith(`[Cache Refresh] Device cache refreshed. ${data.length} devices currently available.`)
+			expect(log.debug).toHaveBeenCalledWith(`[Cache Refresh] Device cache refreshed. ${data.length} devices currently available.`)
 			vi.resetModules()
 		})
 

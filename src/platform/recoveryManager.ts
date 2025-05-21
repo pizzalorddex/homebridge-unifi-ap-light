@@ -62,10 +62,10 @@ export class RecoveryManager {
 			// Update the device cache with only ready devices
 			if (platform && typeof platform.getDeviceCache === 'function') {
 				platform.getDeviceCache().setDevices(readyDevices)
-				this.log.info(`[Cache Refresh] Device cache refreshed after recovery. ${readyDevices.length} devices are ready and available.`)
+				this.log.debug(`[Cache Refresh] Device cache refreshed after recovery. ${readyDevices.length} devices are ready and available.`)
 			} else {
 				await this.refreshDeviceCache()
-				this.log.info('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
+				this.log.debug('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 			}
 			this.log.info('[Recovery] Immediate cache refresh completed successfully.')
 		} catch (err) {

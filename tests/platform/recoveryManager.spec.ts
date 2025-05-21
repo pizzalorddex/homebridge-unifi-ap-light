@@ -45,7 +45,7 @@ describe('RecoveryManager', () => {
 		expect(sessionManager.authenticate).toHaveBeenCalled()
 		expect(refreshDeviceCache).toHaveBeenCalled()
 		expect(log.info).toHaveBeenCalledWith('[Recovery] Immediate cache refresh requested (triggered by accessory error).')
-		expect(log.info).toHaveBeenCalledWith('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
+		expect(log.debug).toHaveBeenCalledWith('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 		expect(log.info).toHaveBeenCalledWith('[Recovery] Immediate cache refresh completed successfully.')
 	})
 
@@ -79,7 +79,7 @@ describe('RecoveryManager', () => {
 		expect(sessionManager.authenticate).toHaveBeenCalled()
 		expect(mockDeviceCache.setDevices).toHaveBeenCalledWith(readyAps)
 		expect(log.info).toHaveBeenCalledWith('[Recovery] Immediate cache refresh requested (triggered by accessory error).')
-		expect(log.info).toHaveBeenCalledWith(`[Cache Refresh] Device cache refreshed after recovery. ${readyAps.length} devices are ready and available.`)
+		expect(log.debug).toHaveBeenCalledWith(`[Cache Refresh] Device cache refreshed after recovery. ${readyAps.length} devices are ready and available.`)
 		expect(log.info).toHaveBeenCalledWith('[Recovery] Immediate cache refresh completed successfully.')
 	})
 
@@ -117,7 +117,7 @@ describe('RecoveryManager', () => {
 			await recoveryManager.forceImmediateCacheRefresh()
 			expect(refreshDeviceCache).toHaveBeenCalled()
 			expect(log.info).toHaveBeenCalledWith('[Recovery] Immediate cache refresh requested (triggered by accessory error).')
-			expect(log.info).toHaveBeenCalledWith('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
+			expect(log.debug).toHaveBeenCalledWith('[Cache Refresh] Device cache refreshed after recovery (fallback to full cache refresh).')
 			expect(log.info).toHaveBeenCalledWith('[Recovery] Immediate cache refresh completed successfully.')
 		})
 
