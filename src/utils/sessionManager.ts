@@ -118,7 +118,7 @@ export class SessionManager {
 		} catch (error) {
 			const axiosError = error as AxiosError
 			if (axiosError.response?.status === 401) {
-				this.log.warn(`[Session] Session expired for host "${this.host}", retrying authentication...`)
+				this.log.debug(`[Session] Session expired for host "${this.host}", retrying authentication...`)
 				await this.authenticate()
 				return await this.axiosInstance(config)
 			} else if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ENOTFOUND') {
