@@ -154,4 +154,30 @@ describe('RecoveryManager', () => {
 			expect(refreshDeviceCache).toHaveBeenCalled()
 		})
 	})
+
+	// --- branch/edge cases for coverage ---
+	describe('concurrency/locking', () => {
+		it('should prevent concurrent recovery attempts (lockout)', async () => {
+			const platform = { config: {} }
+			const { loadFixture } = await import('../fixtures/apiFixtures')
+			const { data } = loadFixture('device-list-success.fixture.json')
+			const readyAps = data.filter((d: any) => d.type === 'uap' || d.type === 'udm')
+			vi.spyOn(unifiModule, 'getAccessPoints').mockImplementation(async () => {
+				// Simulate a delay to keep the lock held
+				await new Promise(res => setTimeout(res, 50))
+				return readyAps
+			})
+			const recoveryManager = new TestRecoveryManager(sessionManager, refreshDeviceCache, log, platform)
+			resetErrorState()
+			// Run two calls in parallel
+			const p1 = recoveryManager.forceImmediateCacheRefresh()
+			const p2 = recoveryManager.forceImmediateCacheRefresh()
+			await Promise.all([p1, p2])
+			// Only one should have actually run the recovery logic
+			expect(sessionManager.authenticate).toHaveBeenCalledTimes(1)
+			expect(refreshDeviceCache).toHaveBeenCalledTimes(1)
+			// The second call should log 'already in progress' info
+			expect(log.info).toHaveBeenCalledWith('[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh already in progress.')
+		})
+	})
 })

@@ -11,6 +11,8 @@ import { shouldLogError, getErrorKey } from '../utils/errorLogManager.js'
  * Now includes robust device readiness check before updating cache/accessories.
  */
 export class RecoveryManager {
+	private isRecoveryInProgress = false
+
 	constructor(
     private readonly sessionManager: SessionManager,
     private readonly refreshDeviceCache: () => Promise<void>,
@@ -24,20 +26,24 @@ export class RecoveryManager {
    * @returns {Promise<void>}
    */
 	public async forceImmediateCacheRefresh(): Promise<void> {
-		// Suppress the info log using errorLogManager
-		const infoKey = getErrorKey(
-			'RecoveryInfo',
-			'Immediate cache refresh requested (triggered by accessory error).',
-			'endpoint: forceImmediateCacheRefresh'
-		)
-		const { logLevel } = shouldLogError(
-			infoKey,
-			'Immediate cache refresh requested (triggered by accessory error).',
-			'info'
-		)
-		if (logLevel !== 'none') {
-			this.log.info('[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh requested (triggered by accessory error).')
+		if (this.isRecoveryInProgress) {
+			// Suppress repeated info log for in-progress recovery
+			const infoKey = getErrorKey(
+				'RecoveryInfo',
+				'Immediate cache refresh already in progress.',
+				'endpoint: forceImmediateCacheRefresh'
+			)
+			const { logLevel } = shouldLogError(
+				infoKey,
+				'Immediate cache refresh already in progress.',
+				'info'
+			)
+			if (logLevel !== 'none') {
+				this.log.info('[API] Info [endpoint: forceImmediateCacheRefresh]: Immediate cache refresh already in progress.')
+			}
+			return
 		}
+		this.isRecoveryInProgress = true
 		try {
 			await this.sessionManager.authenticate()
 
@@ -86,6 +92,8 @@ export class RecoveryManager {
 			errorHandler(this.log, { name: 'RecoveryInfo', message: 'Immediate cache refresh completed successfully.' }, { endpoint: 'forceImmediateCacheRefresh' })
 		} catch (err) {
 			errorHandler(this.log, { name: 'RecoveryError', message: 'Immediate cache refresh failed', error: err instanceof Error ? err.message : String(err) }, { endpoint: 'forceImmediateCacheRefresh' })
+		} finally {
+			this.isRecoveryInProgress = false
 		}
 	}
 }
