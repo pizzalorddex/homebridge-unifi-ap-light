@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mockPlatform, makeAccessoryWithUUID, mockRestoreAccessory, mockRemoveAccessory, mockCreateAndRegisterAccessory, createMockAccessoryList } from '../fixtures/homebridgeMocks'
+import { resetErrorState } from '../../src/utils/errorLogManager'
 
 // Use shared mocks instead of local top-level mocks
 let getAccessPoints: any
@@ -35,6 +36,7 @@ describe('discoverDevices', () => {
 	let platform: any
 
 	beforeEach(async () => {
+		resetErrorState()
 		setDevices.mockClear()
 		clear.mockClear()
 		removeAccessory.mockClear()

@@ -1,6 +1,11 @@
 // Centralized error handling utilities
 import { PlatformAccessory, Logger } from 'homebridge'
 import type { UnifiAPLight } from '../platform.js'
+import {
+	getErrorKey,
+	shouldLogError,
+	setOffline
+} from './errorLogManager.js'
 
 /**
  * Mark a HomeKit accessory as Not Responding (instance method logic).
@@ -54,35 +59,96 @@ export function errorHandler(
 	}
 	const ctx = ctxParts.length ? ctxParts.join(', ') : ''
 
+	let name = 'UnknownError'
+	let message = ''
+	if (error && typeof error === 'object' && 'name' in error) {
+		name = (error as any).name
+	}
+	if (error && typeof error === 'object' && 'message' in error) {
+		message = String((error as any).message)
+	} else {
+		message = String(error)
+	}
+	const errorKey = getErrorKey(name, message, ctx)
+
+	let logLevel: 'error' | 'warn' | 'debug' | 'none' = 'error'
+	// Apply suppression/throttling for all errors
+	const result = shouldLogError(errorKey, message)
+	logLevel = result.logLevel
+	const summary = result.summary
+	// Only set offline for network/auth errors after summary is logged (i.e., after 7th call)
+	if ((name === 'UnifiNetworkError' || name === 'UnifiAuthError') && summary) {
+		setOffline(errorKey)
+	}
+	if (logLevel === 'none') {
+		return
+	}
+
+	// Always ensure logFn is a function
+	const noop = () => {}
+	let logFn: (msg: string) => void = noop
+	if (logLevel === 'error' && typeof log.error === 'function') {
+		logFn = log.error.bind(log)
+	} else if (logLevel === 'debug' && typeof log.debug === 'function') {
+		logFn = log.debug.bind(log)
+	} else if (logLevel === 'warn' && typeof log.warn === 'function') {
+		logFn = log.warn.bind(log)
+	} else {
+		logFn = noop
+	}
+
 	// Handle custom UniFi errors
-	if (error && typeof error === 'object') {
-		const name = (error as any).name
-		const hasMessage = Object.prototype.hasOwnProperty.call(error, 'message')
-		const message = hasMessage ? (error as any).message : String(error)
-		if (name === 'UnifiApiError') {
-			log.error(`[API] API error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
-			return
+	if (name === 'UnifiApiError') {
+		if (summary) {
+			logFn(`[API] API error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] API error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 		}
-		if (name === 'UnifiAuthError') {
-			log.error(`[API] Authentication error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
-			return
+		return
+	}
+	if (name === 'UnifiAuthError') {
+		if (summary) {
+			logFn(`[API] Authentication error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] Authentication error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 		}
-		if (name === 'UnifiNetworkError') {
-			log.error(`[API] Network error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
-			return
+		return
+	}
+	if (name === 'UnifiNetworkError') {
+		if (summary) {
+			logFn(`[API] Network error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] Network error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 		}
-		if (name === 'UnifiConfigError') {
-			log.error(`[API] Config error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
-			return
+		return
+	}
+	if (name === 'UnifiConfigError') {
+		if (summary) {
+			logFn(`[API] Config error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] Config error${ctx ? ' [' + ctx + ']' : ''}: ${message}`)
 		}
+		return
 	}
 
 	// Fallback for generic errors
 	if (error instanceof Error) {
-		log.error(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${error.message}`)
+		if (summary) {
+			logFn(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${error.message}`)
+		}
 	} else if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
-		log.error(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${(error as any).message}`)
+		if (summary) {
+			logFn(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${(error as any).message}`)
+		}
 	} else {
-		log.error(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${String(error)}`)
+		if (summary) {
+			logFn(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${summary}`)
+		} else {
+			logFn(`[API] Error${ctx ? ' [' + ctx + ']' : ''}: ${String(error)}`)
+		}
 	}
 }

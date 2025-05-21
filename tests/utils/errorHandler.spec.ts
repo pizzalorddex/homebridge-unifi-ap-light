@@ -69,7 +69,12 @@ describe('errorHandler', () => {
 	describe('errorHandler (main function)', () => {
 		let log: any
 		beforeEach(() => {
-			log = { error: vi.fn() }
+			log = {
+				error: vi.fn(),
+				warn: vi.fn(),
+				debug: vi.fn(),
+				info: vi.fn(),
+			}
 		})
 
 		it('logs UnifiApiError with context', () => {
@@ -132,6 +137,146 @@ describe('errorHandler', () => {
 			const log = { error: vi.fn() }
 			errorHandler(log as any, Symbol('other'))
 			expect(log.error).toHaveBeenCalledWith('[API] Error: Symbol(other)')
+		})
+	})
+
+	describe('errorHandler log suppression and offline mode', () => {
+		let log: any
+		let resetErrorState: () => void
+		beforeEach(async () => {
+			log = {
+				error: vi.fn(),
+				warn: vi.fn(),
+				debug: vi.fn(),
+				info: vi.fn(),
+			}
+			// Defensive: ensure all log methods are functions
+			for (const method of ['error', 'warn', 'debug', 'info']) {
+				if (typeof log[method] !== 'function') {
+					log[method] = vi.fn()
+				}
+			}
+			// Use ESM import for resetErrorState
+			({ resetErrorState } = await import('../../src/utils/errorLogManager'))
+			resetErrorState()
+		})
+
+		it('suppresses repeated errors and logs summary at threshold', () => {
+			const err = { name: 'UnifiNetworkError', message: 'net fail' }
+			errorHandler(log, err)
+			for (let i = 0; i < 3; i++) {
+				errorHandler(log, err)
+			}
+			// Only the first should be error, others suppressed
+			expect(log.error).toHaveBeenCalledTimes(1)
+			// Simulate up to threshold
+			for (let i = 3; i < 7; i++) {
+				errorHandler(log, err)
+			}
+			// At threshold+1, should log summary
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Suppressed'))
+		})
+
+		it('downgrades to debug in offline mode after suppression/summary', () => {
+			const err = { name: 'UnifiNetworkError', message: 'net fail' }
+			// 1st call: error
+			errorHandler(log, err)
+			// 2nd-6th: suppressed
+			for (let i = 0; i < 5; i++) {
+				errorHandler(log, err)
+			}
+			// 7th: summary (error)
+			errorHandler(log, err)
+			// 8th+: should be debug (offline)
+			errorHandler(log, err)
+			// Check: 1st error, 7th summary, 8th debug
+			expect(log.error).toHaveBeenCalledWith('[API] Network error: net fail')
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Suppressed'))
+			expect(log.debug).toHaveBeenCalledWith('[API] Network error: net fail')
+		})
+
+		it('resets suppression and offline state on new error message', () => {
+			const err1 = { name: 'UnifiNetworkError', message: 'net fail' }
+			const err2 = { name: 'UnifiNetworkError', message: 'net fail 2' }
+			errorHandler(log, err1)
+			for (let i = 0; i < 3; i++) {
+				errorHandler(log, err1)
+			}
+			errorHandler(log, err2)
+			// Should log error for new message
+			expect(log.error).toHaveBeenCalledWith('[API] Network error: net fail 2')
+		})
+
+		it('resets offline state on recovery', async () => {
+			const err = { name: 'UnifiNetworkError', message: 'net fail' }
+			errorHandler(log, err)
+			for (let i = 0; i < 3; i++) {
+				errorHandler(log, err)
+			}
+			resetErrorState()
+			errorHandler(log, err)
+			// After reset, should log error again
+			expect(log.error).toHaveBeenCalledWith('[API] Network error: net fail')
+		})
+
+		it('uses warn log level if errorLogManager returns warn', async () => {
+			const log = { error: undefined, warn: vi.fn(), debug: undefined, info: undefined, success: vi.fn(), log: vi.fn() }
+			const err = { name: 'UnifiNetworkError', message: 'net fail' }
+			const mod = await import('../../src/utils/errorLogManager')
+			const spy = vi.spyOn(mod, 'shouldLogError').mockReturnValue({ logLevel: 'warn' })
+			errorHandler(log as any, err)
+			expect(log.warn).toHaveBeenCalledWith('[API] Network error: net fail')
+			spy.mockRestore()
+		})
+
+		it('falls back to noop if no log methods are functions', async () => {
+			const log = { error: undefined, warn: undefined, debug: undefined, info: undefined, success: undefined, log: undefined }
+			const err = { name: 'UnifiNetworkError', message: 'net fail' }
+			const mod = await import('../../src/utils/errorLogManager')
+			const spy = vi.spyOn(mod, 'shouldLogError').mockReturnValue({ logLevel: 'error' })
+			errorHandler(log as any, err)
+			// No error thrown, nothing called
+			spy.mockRestore()
+		})
+
+		it('logs summary for UnifiConfigError', () => {
+			const log = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn(), success: vi.fn(), log: vi.fn() }
+			const err = { name: 'UnifiConfigError', message: 'config fail' }
+			for (let i = 0; i < 6; i++) {
+				errorHandler(log as any, err)
+			}
+			errorHandler(log as any, err) // 7th call triggers summary
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Suppressed'))
+		})
+
+		it('logs summary for generic Error', () => {
+			const log = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn(), success: vi.fn(), log: vi.fn() }
+			const err = new Error('generic fail')
+			for (let i = 0; i < 6; i++) {
+				errorHandler(log as any, err)
+			}
+			errorHandler(log as any, err)
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Suppressed'))
+		})
+
+		it('logs summary for object with no message', () => {
+			const log = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn(), success: vi.fn(), log: vi.fn() }
+			const err = { foo: 123 }
+			for (let i = 0; i < 6; i++) {
+				errorHandler(log as any, err)
+			}
+			errorHandler(log as any, err)
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Suppressed'))
+		})
+
+		it('logs summary for non-object error', () => {
+			const log = { error: vi.fn(), warn: vi.fn(), debug: vi.fn(), info: vi.fn(), success: vi.fn(), log: vi.fn() }
+			const err = 42
+			for (let i = 0; i < 6; i++) {
+				errorHandler(log as any, err)
+			}
+			errorHandler(log as any, err)
+			expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Suppressed'))
 		})
 	})
 })
