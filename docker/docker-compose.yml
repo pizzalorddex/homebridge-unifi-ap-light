@@ -1,0 +1,15 @@
+services:
+  homebridge:
+    image: homebridge/homebridge:latest
+    container_name: homebridge
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "8581:8581"   # Homebridge UI
+      - "51826:51826" # Homebridge HAP (HomeKit) port
+    environment:
+      - TZ=America/Los_Angeles # Set your timezone
+      - HOMEBRIDGE_CONFIG_UI=1
+      - HOMEBRIDGE_CONFIG_UI_PORT=8581
+    volumes:
+      - ./config:/homebridge

@@ -64,4 +64,30 @@ jobs:
       - name: Check Homebridge version
         run: npx homebridge --version
       - name: "Smoke test: Homebridge help (should not crash)" # Ensure plugin loads and Homebridge CLI works
-        run: npx homebridge --help
+        run: npx homebridge --help"
+      - name: Create test config.json for plugin discovery
+        run: |
+          cat > config.json <<EOF
+          {
+            "bridge": {
+              "name": "Test Homebridge",
+              "username": "CC:22:3D:E3:CE:30",
+              "port": 51826,
+              "pin": "031-45-154"
+            },
+            "accessories": [],
+            "platforms": [
+              {
+                "platform": "UnifiAPLight",
+                "name": "UniFi AP Lights"
+              }
+            ]
+          }
+          EOF
+      - name: Run Homebridge with test config and capture output
+        run: |
+          npx homebridge -I -U . -C > hb.log 2>&1 || true
+      - name: Check Homebridge log for plugin detection
+        run: |
+          grep -q "UnifiAPLight" hb.log || (echo "ERROR: Platform not loaded" && cat hb.log && exit 1)
+          ! grep -q "No plugin was found for the platform" hb.log || (echo "ERROR: Plugin not found" && cat hb.log && exit 1)

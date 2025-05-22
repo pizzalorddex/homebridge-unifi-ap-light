@@ -24,3 +24,9 @@ lcov-report/
 
 # API Testing
 API Testing/
+
+# Docker
+/docker/
+
+# Tests
+tests/
