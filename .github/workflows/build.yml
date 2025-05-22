@@ -62,6 +62,6 @@ jobs:
       - name: Install plugin in Homebridge global # Link plugin into Homebridge's global node_modules
         run: npm link homebridge-unifi-ap-light
       - name: Check Homebridge version
-        run: homebridge --version
+        run: npx homebridge --version
       - name: "Smoke test: Homebridge help (should not crash)" # Ensure plugin loads and Homebridge CLI works
-        run: homebridge --help
+        run: npx homebridge --help
