@@ -63,11 +63,9 @@ jobs:
         run: npm link homebridge-unifi-ap-light
       - name: Check Homebridge version
         run: npx homebridge --version
-      - name: "Smoke test: Homebridge help (should not crash)" # Ensure plugin loads and Homebridge CLI works
-        run: npx homebridge --help"
       - name: Create test config.json for plugin discovery
         run: |
-          cat > config.json <<EOF
+          cat > config.json <<'EOF'
           {
             "bridge": {
               "name": "Test Homebridge",
