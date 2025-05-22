@@ -52,6 +52,13 @@
           "type": "string"
         },
         "description": "Optional list of device IDs to exclude. Devices listed here will be ignored, even if also listed above."
+      },
+      "refreshIntervalMinutes": {
+        "title": "Device Cache Refresh Interval (minutes)",
+        "type": "number",
+        "minimum": 1,
+        "default": 10,
+        "description": "How often to refresh the device cache, in minutes. Default is 10."
       }
     }
   }

@@ -12,7 +12,7 @@ Control the light rings on your UniFi Access Point(s) with HomeKit!
 
 ## Requirements
 - **Node.js:** >=20.0.0 <23.0.0
-- **Homebridge:** >=1.5.0
+- **Homebridge:** >=1.8.0
 
 ## Installation
 Search for `homebridge-unifi-ap-light` in the Homebridge UI, or run:
