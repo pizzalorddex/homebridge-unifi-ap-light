@@ -1,28 +1,36 @@
-# Homebridge v2 Docker Test Environment
+# Homebridge Docker Test Environment
 
-This Docker Compose setup will run the latest Homebridge and the Homebridge Config UI X web interface. It is designed for local development and testing.
+This Docker Compose setup runs the latest Homebridge and the Homebridge Config UI X web interface for local development and testing.
 
-## Usage
+## Quick Start
 
-1. **Build and start the environment:**
+1. **Copy the Example Config:**
+   ```sh
+   cp config/config.example.json config/config.json
+   ```
+   - Edit `config/config.json` with your UniFi and Homebridge settings.
+   - Only `config.example.json` is tracked by git; your personal `config.json` will never be committed.
+
+2. **Start Homebridge:**
    ```sh
    cd docker
    docker compose up -d
    ```
 
-2. **Access Homebridge UI:**
-   - Open your browser and go to: [http://localhost:8581](http://localhost:8581)
-   - (If you mapped the UI to a different port, use that port.)
+3. **Access the Web UI:**  
+   Open [http://localhost:8581](http://localhost:8581) in your browser.
 
-3. **Homebridge Data:**
-   - The `config` folder in this directory is mounted as `/homebridge` in the container. Your Homebridge config, accessories, and persist data will be stored here.
-
-4. **Stopping the environment:**
+4. **Stop Homebridge:**
    ```sh
    docker compose down
    ```
 
+## Data & Configuration
+
+- The `config` folder is mounted as `/homebridge` in the container. All Homebridge data (config, accessories, persist, etc.) is stored here.
+
 ## Notes
-- The default username is `admin` and the default password is `admin` (unless you change it in the UI).
-- You can update the Homebridge version by editing the `image:` tag in `docker-compose.yml`.
+
+- Default UI login: `admin` / `admin` (unless changed in the UI).
+- To update Homebridge, change the `image:` tag in `docker-compose.yml`.
 - To test your plugin, copy or symlink your built plugin files into the `config` folder, or install via the UI.
