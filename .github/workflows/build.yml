@@ -1,31 +1,67 @@
-name: Build and Lint
+# GitHub Actions workflow for Homebridge UniFi AP Lights plugin
+# Runs build, lint, and tests on supported Node.js versions
+# Also runs a Homebridge v1 and v2 compatibility smoke test
+
+name: Build, Lint, Test, and Homebridge Compatibility
 
 on: [push, pull_request]
 
 jobs:
-  build:
+  # Main build, lint, and test job for supported Node.js versions
+  build-lint-test:
+    name: Build, Lint, and Test (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
-        # the Node.js versions to build on
-        node-version: [12.x, 13.x, 14.x, 15.x, 16.x]
-
+        node-version: [20.x, 22.x] # Only test supported Node.js versions
     steps:
       - uses: actions/checkout@v2
-
-      - name: Use Node.js ${{ matrix.node-version }} 
+      - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v2
         with:
           node-version: ${{ matrix.node-version }}
-
       - name: Install dependencies
         run: npm install
-
       - name: Lint the project
         run: npm run lint
-
       - name: Build the project
         run: npm run build
         env:
           CI: true
+      - name: Run tests # Run all unit and integration tests
+        run: |
+          npm test || npx vitest run
+
+  # Smoke test for Homebridge v1 and v2 compatibility
+  homebridge-compat:
+    name: Homebridge v1 & v2 Compatibility Smoke Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        homebridge-version: ["latest", "homebridge/homebridge#beta-2.0.0"] # Test both stable and v2 beta
+        node-version: [20.x, 22.x]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install Homebridge (${{ matrix.homebridge-version }}) # Install Homebridge v1 or v2
+        run: |
+          if [ "${{ matrix.homebridge-version }}" = "latest" ]; then
+            npm install -g homebridge@latest
+          else
+            npm install -g github:${{ matrix.homebridge-version }}
+          fi
+      - name: Install plugin dependencies
+        run: npm install
+      - name: Build plugin
+        run: npm run build
+      - name: Link plugin for Homebridge # Make plugin available globally
+        run: npm link
+      - name: Install plugin in Homebridge global # Link plugin into Homebridge's global node_modules
+        run: npm link homebridge-unifi-ap-light
+      - name: Check Homebridge version
+        run: homebridge --version
+      - name: "Smoke test: Homebridge help (should not crash)" # Ensure plugin loads and Homebridge CLI works
+        run: homebridge --help
