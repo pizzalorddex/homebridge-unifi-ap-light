@@ -105,3 +105,17 @@ export async function getAccessPoints(
 
 	return allDevices
 }
+
+/**
+ * Is this a color changing AP?
+ */
+export function isRgb(ap: UniFiAP): boolean {
+	return 'led_override_color' in ap && 'led_override_color_brightness' in ap
+}
+
+/**
+ * Is this a Unifi Dream Machine?
+ */
+export function isUdm(ap: UniFiAP): boolean {
+	return ap.type === 'udm'
+}
