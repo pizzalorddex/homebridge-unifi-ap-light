@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1-beta.1] - 2026-10-07
+
+- Recover discovery and cached HomeKit controls when the controller is unavailable at startup.
+- Share refresh work across scheduled checks and concurrent recovery requests.
+- Report failed LED writes to HomeKit and preserve fresh device data after a write.
+- Resolve inherited LED state through the site's LED setting.
+- Retry rate-limited logins once and distinguish controller outages from endpoint detection errors.
+- Keep login request credentials out of authentication error logs.
+- Add optional HTTPS certificate verification and a private CA file setting.
+
 ## [1.5.0] - 2026-10-07
 
 ### Changed

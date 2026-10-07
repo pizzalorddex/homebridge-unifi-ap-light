@@ -1,7 +1,7 @@
 {
   "displayName": "UniFi Access Point Light",
   "name": "homebridge-unifi-ap-light",
-  "version": "1.5.0",
+  "version": "1.5.1-beta.1",
   "description": "Control UniFi access point light rings from HomeKit.",
   "license": "Apache-2.0",
   "type": "module",

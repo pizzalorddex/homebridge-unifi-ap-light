@@ -31,7 +31,8 @@
       "password": {
         "title": "Password",
         "type": "string",
-        "description": "Password for the local UniFi account."
+        "description": "Password for the local UniFi account.",
+        "format": "password"
       },
       "sites": {
         "title": "Sites",
@@ -62,7 +63,18 @@
         "type": "number",
         "minimum": 1,
         "default": 10,
-        "description": "How often the plugin refreshes its device list."
+        "description": "How often the plugin refreshes its device list.",
+        "maximum": 1440
+      },
+      "verifySsl": {
+        "title": "Verify HTTPS certificate",
+        "type": "boolean",
+        "description": "Verify the controller certificate. Self-signed controllers need a trusted CA file."
+      },
+      "caFile": {
+        "title": "Trusted CA file",
+        "type": "string",
+        "description": "Optional PEM CA certificate path on the Homebridge host. Enables certificate verification unless explicitly disabled."
       }
     }
   }

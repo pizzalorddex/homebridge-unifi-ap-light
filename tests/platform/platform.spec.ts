@@ -106,9 +106,10 @@ describe('UnifiAPLight Platform', () => {
 		expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('[Cache Restore] Registered cached accessory with Homebridge'))
 	})
 
-	it('calls discoverDevices and starts timer', () => {
+	it('calls discoverDevices and starts timer', async () => {
 		const spy = vi.spyOn(platform as any, 'startDeviceCacheRefreshTimer')
 		;(platform as any).handleDidFinishLaunching()
+		await Promise.resolve()
 		expect(discoverDevices).toHaveBeenCalledWith(platform)
 		expect(spy).toHaveBeenCalled()
 		expect(mockLogger.debug).toHaveBeenCalledWith('Finished loading, starting device discovery...')

@@ -51,11 +51,11 @@ describe('UnifiApiHelper', () => {
 	})
 
 	describe('API Type Detection', () => {
-		it('should throw if detectApiType fails both endpoints', async () => {
+		it('reports a transport fault without probing the other endpoint', async () => {
 			const instance = { post: vi.fn().mockRejectedValue(new Error('fail')) }
 			const log = mockLoggerFull
 			const helper = new UnifiApiHelper()
-			await expect(helper.detectApiType(instance as any, 'u', 'p', log)).rejects.toThrow('Unable to detect UniFi API structure.')
+			await expect(helper.detectApiType(instance as any, 'u', 'p', log)).rejects.toThrow('transport failure')
 		})
 
 		it('should detect UnifiOS API type', async () => {
@@ -72,7 +72,7 @@ describe('UnifiApiHelper', () => {
 		it('should detect SelfHosted API type if UnifiOS fails', async () => {
 			const instance = {
 				post: vi.fn()
-					.mockRejectedValueOnce(new Error('fail'))
+					.mockRejectedValueOnce({ response: { status: 404 } })
 					.mockResolvedValueOnce({}),
 			}
 			const log = mockLoggerFull

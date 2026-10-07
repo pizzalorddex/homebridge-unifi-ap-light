@@ -5,9 +5,11 @@ import { restoreAccessory, removeAccessory, createAndRegisterAccessory } from '.
 import { filterRelevantAps } from '../utils/apFilter.js'
 
 /** Syncs the configured UniFi access points with Homebridge. */
-export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
+export async function discoverDevices(platform: UnifiAPLight, authenticate = true): Promise<void> {
 	try {
-		await platform.sessionManager.authenticate()
+		if (authenticate) {
+			await platform.sessionManager.authenticate()
+		}
 	} catch (err: unknown) {
 		errorHandler(platform.log, err, { endpoint: 'authentication (device discovery)' })
 		for (const accessory of platform.accessories) {
@@ -18,8 +20,11 @@ export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
 	}
 
 	try {
+		if (!authenticate && !(platform.config.sites?.length ? platform.config.sites : ['default']).some(site => platform.sessionManager.getSiteName(site))) {
+			await platform.sessionManager.authenticate()
+		}
 		const siteInput = platform.config.sites?.length ? platform.config.sites : ['default']
-		const resolvedSites: string[] = []
+		let resolvedSites: string[] = []
 		for (const site of siteInput) {
 			const internal = platform.sessionManager.getSiteName(site)
 			if (internal) {
@@ -33,12 +38,30 @@ export async function discoverDevices(platform: UnifiAPLight): Promise<void> {
 			return
 		}
 
-		const accessPoints = await getAccessPoints(
+		const fetchDevices = () => getAccessPoints(
 			platform.sessionManager.request.bind(platform.sessionManager),
 			platform.sessionManager.getApiHelper(),
 			resolvedSites,
 			platform.log
 		)
+
+		let accessPoints
+		try {
+			accessPoints = await fetchDevices()
+		} catch (err) {
+			if (authenticate) {
+				throw err
+			}
+			await platform.sessionManager.authenticate()
+			resolvedSites = siteInput.map(site => platform.sessionManager.getSiteName(site)).filter((site): site is string => Boolean(site))
+			if (!resolvedSites.length) {
+				throw new Error('No valid sites resolved after authentication')
+			}
+			accessPoints = await fetchDevices()
+		}
+		if (platform.isShuttingDown) {
+			return
+		}
 
 		const includeIds = platform.config.includeIds
 		const excludeIds = platform.config.excludeIds

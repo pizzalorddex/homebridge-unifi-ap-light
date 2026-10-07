@@ -66,6 +66,16 @@ Optional settings:
   `includeIds`.
 - `refreshIntervalMinutes` controls device-cache refreshes and defaults to 10.
 
+### HTTPS certificates
+
+For a controller with a publicly trusted certificate, set `"verifySsl": true`.
+For a private CA, also set `"caFile"` to its PEM certificate path on the
+Homebridge host. Setting `caFile` enables verification unless `verifySsl` is
+explicitly false. In Docker, mount the certificate and use its container path.
+
+Existing configurations continue to accept self-signed certificates. In that
+mode HTTPS encrypts traffic but does not verify the controller's identity.
+
 ## Troubleshooting
 
 - Authentication errors usually mean the account is a UI.com account, the

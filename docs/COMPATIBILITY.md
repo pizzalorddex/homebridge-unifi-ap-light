@@ -9,10 +9,10 @@ The plugin is tested with these versions:
 | UniFi Network Server | 10.6.101 | Login, site and AP discovery, state reads, and LED control |
 | UniFi OS Server | 5.1.42 on ARM64, Network 10.6.101 | Login, discovery, LED read, and an unchanged-value LED write on a physical AP |
 
-The plugin also runs with UniFi OS Server 5.1.42 and Network 10.6.106.
-The physical-AP contract test above was performed with Network 10.6.101;
-10.6.106 has subsequent discovery and production-use evidence. The automated
-write check sends the current LED value, so it does not toggle the light.
+UniFi OS Server 5.1.42 with Network 10.6.106 also passed physical-AP discovery,
+LED reads, and an unchanged-value LED write with the reliability patch in
+1.5.1-beta.1. The automated write check sends the current LED value, so it does
+not toggle the light.
 
 ## UniFi API use
 
