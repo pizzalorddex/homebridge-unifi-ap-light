@@ -1,31 +1,57 @@
-name: Build and Lint
+name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-lint-test:
+    name: Node ${{ matrix.node-version }} / Homebridge ${{ matrix.homebridge-version }}
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     strategy:
+      fail-fast: false
       matrix:
-        # the Node.js versions to build on
-        node-version: [12.x, 13.x, 14.x, 15.x, 16.x]
-
+        include:
+          - node-version: 22.x
+            homebridge-version: 1.11.4
+          - node-version: 22.x
+            homebridge-version: 2.4.0
+          - node-version: 24.x
+            homebridge-version: 1.11.4
+          - node-version: 24.x
+            homebridge-version: 2.4.0
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Use Node.js ${{ matrix.node-version }} 
-        uses: actions/setup-node@v2
+      - uses: actions/checkout@v5
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
-
+          cache: npm
       - name: Install dependencies
-        run: npm install
-
-      - name: Lint the project
-        run: npm run lint
-
-      - name: Build the project
-        run: npm run build
+        run: npm ci
+      - name: Select Homebridge ${{ matrix.homebridge-version }}
+        shell: bash
+        run: |
+          if [[ "${{ matrix.homebridge-version }}" == 2.* ]]; then
+            npm install --no-save --ignore-scripts \
+              homebridge@${{ matrix.homebridge-version }} \
+              hap-nodejs@npm:@homebridge/hap-nodejs@2.2.3
+          else
+            npm install --no-save --ignore-scripts \
+              homebridge@${{ matrix.homebridge-version }} \
+              hap-nodejs@0.14.3
+          fi
+      - name: Verify source
+        run: npm run verify
         env:
           CI: true
+      - name: Verify publishable artifact
+        run: npm run check:package

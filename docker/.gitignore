@@ -1,0 +1,3 @@
+# Ignore everything in docker/config except config.example.json
+config/*
+!config/config.example.json

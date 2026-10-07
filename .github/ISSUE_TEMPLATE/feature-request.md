@@ -1,23 +1,23 @@
 ---
-name: Feature Request
-about: Suggest an idea for this project
+name: Feature request
+about: Suggest a change to the plugin
 title: ''
 labels: enhancement
 assignees: ''
-
 ---
 
-**Is your feature request related to a problem? Please describe:**
-<!-- A clear and concise description of what the problem is. Ex. I'm always frustrated when [...] -->
+## What are you trying to do?
 
-**Describe the solution you'd like:**
-<!-- A clear and concise description of what you want to happen. -->
+<!-- Describe the use case or limitation. -->
 
-**Describe alternatives you've considered:**
-<!-- A clear and concise description of any alternative solutions or features you've considered. -->
+## What would you like the plugin to do?
 
-**Additional context:**
-<!-- Add any other context or screenshots about the feature request here. -->
+<!-- Describe the behavior you want. -->
 
+## Hardware and software
 
-<!-- Click the "Preview" tab before you submit to ensure the formatting is correct. -->
+<!-- Include the AP model and UniFi Network version if they matter here. -->
+
+## Other details
+
+<!-- Add a workaround, example, or screenshot if it helps explain the request. -->

@@ -1,38 +1,34 @@
 ---
-name: Support Request
-about: Need help?
+name: Support request
+about: Ask for help with setup or use
 title: ''
 labels: question
 assignees: ''
-
 ---
 
-<!-- You must use the issue template below when submitting a support request -->
+Check the README and existing issues first. Before posting, remove passwords,
+tokens, cookies, controller addresses, MAC addresses, device IDs, and other
+private information.
 
-**Describe Your Problem:**
-<!-- A clear and concise description of what problem you are trying to solve. -->
+## What are you trying to do?
 
-**Logs:**
+<!-- Describe the result you want. -->
+
+## What have you tried?
+
+<!-- Include the steps you followed and what happened. -->
+
+## Relevant logs
+
+```text
 
 ```
-Show the Homebridge logs here, remove any sensitive information.
-```
 
-**Plugin Config:**
+## Versions
 
-```json
-Show your Homebridge config.json here, remove any sensitive information.
-```
-
-**Screenshots:**
-<!-- If applicable, add screenshots to help explain your problem. -->
-
-**Environment:**
-
-* **Plugin Version**:
-* **Homebridge Version**: <!-- homebridge -V -->
-* **Node.js Version**: <!-- node -v -->
-* **NPM Version**: <!-- npm -v -->
-* **Operating System**: <!-- Raspbian / Ubuntu / Debian / Windows / macOS / Docker / hb-service -->
-
-<!-- Click the "Preview" tab before you submit to ensure the formatting is correct. -->
+- Plugin:
+- Homebridge:
+- Node.js:
+- UniFi Network:
+- AP model and firmware:
+- Operating system or container image:

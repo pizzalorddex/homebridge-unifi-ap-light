@@ -1,0 +1,16 @@
+name: unifi-ap-light-test
+
+services:
+  homebridge:
+    image: homebridge/homebridge:latest
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "8581:8581"
+      - "51826:51826"
+    environment:
+      TZ: ${TZ:-UTC}
+      HOMEBRIDGE_CONFIG_UI: "1"
+      HOMEBRIDGE_CONFIG_UI_PORT: "8581"
+    volumes:
+      - ./config:/homebridge
