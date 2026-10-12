@@ -109,7 +109,7 @@ export const mockPlatform = {
 	sessionManager: { getApiHelper: () => ({ getDeviceUpdateEndpoint: vi.fn(() => '/api/s/default/rest/device/ap1') }), request: vi.fn().mockResolvedValue({ status: 200 }) },
 	Service: { AccessoryInformation: {}, Lightbulb: {} },
 	Characteristic: { Manufacturer: 'Manufacturer', Model: 'Model', SerialNumber: 'SerialNumber', FirmwareRevision: 'FirmwareRevision', Name: 'Name', On: 'On' },
-	api: { hap: { uuid: { generate: vi.fn((id) => `uuid-${id}`) } } },
+	api: { hap: { uuid: { generate: vi.fn((id) => `uuid-${id}`) } }, updatePlatformAccessories: vi.fn() },
 	log: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 	forceImmediateCacheRefresh: vi.fn().mockResolvedValue(undefined),
 }

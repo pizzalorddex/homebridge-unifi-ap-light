@@ -2,6 +2,7 @@ import { Logger } from 'homebridge'
 import Axios, { AxiosInstance, AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import jwt from 'jsonwebtoken'
 import https from 'https'
+import { readFileSync } from 'node:fs'
 import { parse as parseCookie } from 'cookie'
 import { UnifiApiHelper, UnifiApiType } from '../api/unifiApiHelper.js'
 import { UnifiSite, UnifiApiError, UnifiAuthError, UnifiNetworkError } from '../models/unifiTypes.js'
@@ -18,10 +19,11 @@ export class SessionManager {
 	private log: Logger
 	private siteMap: Map<string, string> = new Map()
 	private apiHelper: UnifiApiHelper
+	private siteLedStates = new Map<string, { value: boolean; expires: number }>()
 	private reauthenticationPromise: Promise<void> | null = null
 	private reauthenticationFromInstance: AxiosInstance | null = null
 
-	constructor(host: string, username: string, password: string, log: Logger) {
+	constructor(host: string, username: string, password: string, log: Logger, private readonly tls: { verifySsl?: boolean; caFile?: string } = {}) {
 		this.host = host
 		this.username = username
 		this.password = password
@@ -35,7 +37,8 @@ export class SessionManager {
 		try {
 			instance = Axios.create({
 				baseURL: `https://${this.host}`,
-				httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+				httpsAgent: new https.Agent({ rejectUnauthorized: this.tls.verifySsl ?? Boolean(this.tls.caFile),
+					ca: this.tls.caFile ? readFileSync(this.tls.caFile) : undefined }),
 				timeout: CONTROLLER_REQUEST_TIMEOUT_MS,
 			})
 		} catch (err) {
@@ -50,16 +53,12 @@ export class SessionManager {
 				detectionResponse = this.apiHelper.takeAuthenticationResponse()
 			}
 		} catch (err) {
-			throw new UnifiAuthError('Failed to detect UniFi API structure during authentication', err)
+			throw new UnifiAuthError('Failed to detect UniFi API structure during authentication' + (err instanceof UnifiAuthError ? `: ${err.message}` : ''), err)
 		}
 
 		try {
 			if (apiType === UnifiApiType.UnifiOS) {
-				const response: AxiosResponse = detectionResponse || await instance.post('/api/auth/login', {
-					username: this.username,
-					password: this.password,
-					rememberMe: true,
-				})
+				const response: AxiosResponse = detectionResponse || await this.apiHelper.login(instance, apiType, this.username, this.password, this.log)
 				const setCookie = response.headers['set-cookie']
 				if (!setCookie)
 					throw new UnifiAuthError('No cookies returned from UniFi OS login')
@@ -79,10 +78,7 @@ export class SessionManager {
 				instance.defaults.headers.common['X-Csrf-Token'] = csrfToken
 				instance.defaults.headers.common['Cookie'] = `${setCookie.join('; ')}; TOKEN=${token}`
 			} else {
-				const response: AxiosResponse = detectionResponse || await instance.post('/api/login', {
-					username: this.username,
-					password: this.password,
-				})
+				const response: AxiosResponse = detectionResponse || await this.apiHelper.login(instance, apiType, this.username, this.password, this.log)
 				if (!response.headers['set-cookie'])
 					throw new UnifiAuthError('No cookies returned from self-hosted login')
 				instance.defaults.headers.common['Cookie'] = response.headers['set-cookie'].join('; ')
@@ -91,6 +87,7 @@ export class SessionManager {
 			throw new UnifiAuthError('Failed to authenticate with UniFi controller', err)
 		}
 
+		this.siteLedStates.clear()
 		this.axiosInstance = instance
 		this.log.debug(`[Session] Authentication successful for host "${this.host}". API type: ${apiType}`)
 		await this.loadSites()
@@ -177,6 +174,21 @@ export class SessionManager {
 				throw new UnifiApiError('Failed to load site list', error)
 			}
 		}
+	}
+
+	async getSiteLedEnabled(site: string): Promise<boolean> {
+		const cached = this.siteLedStates.get(site)
+		if (cached && cached.expires > Date.now()) {
+			return cached.value
+		}
+		const response = await this.request({ method: 'get', url: this.apiHelper.getSettingsEndpoint(site) })
+		const settings = response.data?.data
+		const management = Array.isArray(settings) ? settings.find(setting => setting.key === 'mgmt') : undefined
+		if (response.data?.meta?.rc !== 'ok' || typeof management?.led_enabled !== 'boolean') {
+			throw new UnifiApiError('Site LED setting is unavailable.')
+		}
+		this.siteLedStates.set(site, { value: management.led_enabled, expires: Date.now() + 30_000 })
+		return management.led_enabled
 	}
 
 	getApiHelper(): UnifiApiHelper {

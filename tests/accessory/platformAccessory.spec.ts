@@ -1,339 +1,147 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Service, Characteristic, uuid } from 'hap-nodejs'
 import { UniFiAP } from '../../src/accessory/platformAccessory.js'
-import { UnifiAPLight } from '../../src/platform.js'
-import { PlatformAccessory } from 'homebridge'
-import { markAccessoryNotResponding } from '../../src/utils/errorHandler.js'
+import { DeviceCache } from '../../src/cache/deviceCache.js'
+import { UnifiApiHelper, UnifiApiType } from '../../src/api/unifiApiHelper.js'
 import { resetErrorState } from '../../src/utils/errorLogManager.js'
-import { mockService, mockAccessory, sharedMockCache, mockPlatform } from '../fixtures/homebridgeMocks.js'
+import { mockLogger } from '../fixtures/homebridgeMocks.js'
 
-describe('UniFiAP Accessory', () => {
-	let accessory: UniFiAP
+const device = { _id: 'test-ap', mac: '00:00:00:00:00:00', site: 'default', type: 'uap',
+	model: 'Test', name: 'Test AP', serial: 'synthetic', version: '1', led_override: 'off' }
 
-	beforeEach(() => {
-		resetErrorState()
-		vi.clearAllMocks()
-		sharedMockCache.getDeviceById.mockReturnValue(mockAccessory.context.accessPoint)
-		sharedMockCache.getAllDevices.mockReturnValue([mockAccessory.context.accessPoint])
-		sharedMockCache.setDevices.mockClear()
-		accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory)
+function fixture(initial = { ...device }) {
+	const cache = new DeviceCache()
+	cache.setDevices([initial, { ...device, _id: 'other-ap' }])
+	const light = new Service.Lightbulb('Test AP')
+	const info = new Service.AccessoryInformation()
+	const accessory = { UUID: uuid.generate(initial._id), context: { accessPoint: initial },
+		getService: (type: unknown) => type === Service.Lightbulb ? light : info }
+	const helper = new UnifiApiHelper()
+	helper.setApiType(UnifiApiType.UnifiOS)
+	const platform = { config: {}, log: mockLogger, Service, Characteristic,
+		getDeviceCache: () => cache,
+		forceImmediateCacheRefresh: vi.fn().mockResolvedValue(undefined),
+		sessionManager: { getApiHelper: () => helper,
+			getSiteLedEnabled: vi.fn().mockResolvedValue(true),
+			request: vi.fn().mockResolvedValue({ status: 200, data: { meta: { rc: 'ok' }, data: [] } }) } }
+	return { cache, light, info, accessory, platform, control: new UniFiAP(platform as any, accessory as any) }
+}
+
+beforeEach(() => { vi.clearAllMocks(); resetErrorState() })
+
+describe('UniFiAP HomeKit behavior', () => {
+	it('binds real On handlers and accessory information', () => {
+		const f = fixture()
+		expect(f.light.getCharacteristic(Characteristic.On).setHandler).toBeDefined()
+		expect(f.light.getCharacteristic(Characteristic.On).getHandler).toBeDefined()
+		expect(f.info.getCharacteristic(Characteristic.Manufacturer).value).toBe('Ubiquiti')
 	})
 
-	describe('Initialization & Service Patching', () => {
-		it('should initialize and patch missing site', () => {
-			expect(accessory.accessPoint).toBeDefined()
-			expect(mockAccessory.getService).toHaveBeenCalled()
-			expect(mockService.setCharacteristic).toHaveBeenCalled()
-		})
-
-		it('should patch missing site and log a warning', () => {
-			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
-			const noSiteDevice = { ...mockAccessory.context.accessPoint, site: undefined }
-			const noSiteAccessory = {
-				...mockAccessory,
-				context: { accessPoint: { ...noSiteDevice } },
-			}
-			const singleSiteConfig = {
-				...mockPlatform,
-				config: { sites: ['mysite'] },
-				sessionManager: { ...mockPlatform.sessionManager, getSiteName: vi.fn(() => 'mysite-internal') },
-				log: logSpy,
-				getDeviceCache: () => ({
-					getDeviceById: vi.fn(() => noSiteDevice),
-					getAllDevices: vi.fn(() => [noSiteDevice]),
-					setDevices: vi.fn(),
-				}),
-			}
-			new UniFiAP(singleSiteConfig as any as UnifiAPLight, noSiteAccessory as any as PlatformAccessory)
-			expect(logSpy.warn).toHaveBeenCalledWith(expect.stringContaining('Patching missing site'))
-		})
-
-		it('should patch missing site and fallback to "default" if no site is resolved or configured', () => {
-			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
-			const noSiteDevice = { ...mockAccessory.context.accessPoint, site: undefined }
-			const noSiteAccessory = {
-				...mockAccessory,
-				context: { accessPoint: { ...noSiteDevice } },
-			}
-			const singleSiteConfig = {
-				...mockPlatform,
-				config: { sites: [''] },
-				sessionManager: { ...mockPlatform.sessionManager, getSiteName: vi.fn(() => undefined) },
-				log: logSpy,
-				getDeviceCache: () => ({
-					getDeviceById: vi.fn(() => noSiteDevice),
-					getAllDevices: vi.fn(() => [noSiteDevice]),
-					setDevices: vi.fn(),
-				}),
-			}
-			const instance = new UniFiAP(singleSiteConfig as any as UnifiAPLight, noSiteAccessory as any as PlatformAccessory)
-			expect(instance.accessPoint.site).toBe('default')
-			expect(logSpy.warn).toHaveBeenCalledWith(expect.stringContaining('Patching missing site'))
-		})
-
-		it('should use context accessPoint if device not found in cache (constructor)', () => {
-			const contextDevice = { ...mockAccessory.context.accessPoint, name: 'Context AP', _id: 'context1' }
-			const contextAccessory = { ...mockAccessory, context: { accessPoint: contextDevice } }
-			const instance = new UniFiAP({
-				...mockPlatform,
-				getDeviceCache: () => ({
-					getDeviceById: vi.fn(() => undefined),
-					getAllDevices: vi.fn(() => []),
-					setDevices: vi.fn(),
-				}),
-			} as any as UnifiAPLight, contextAccessory as any as PlatformAccessory)
-			expect(instance.accessPoint).toBe(contextDevice)
-		})
+	it('writes only LED fields and keeps other devices', async () => {
+		const f = fixture()
+		await f.control.setOn(true)
+		expect(f.platform.sessionManager.request).toHaveBeenCalledWith({ method: 'put',
+			url: '/proxy/network/api/s/default/rest/device/test-ap', data: { led_override: 'on' } })
+		expect(f.cache.getDeviceById('test-ap')?.led_override).toBe('on')
+		expect(f.cache.getDeviceById('other-ap')).toBeDefined()
 	})
 
-	describe('AccessoryInformation & Lightbulb Service', () => {
-		it('should log a warning if AccessoryInformation service is missing', () => {
-			const contextAccessory = { ...mockAccessory, getService: vi.fn(() => undefined) }
-			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
-			const platformWithLog = { ...mockPlatform, log: logSpy, getDeviceCache: vi.fn(() => ({ getDeviceById: vi.fn(() => undefined) })) }
-			new UniFiAP(platformWithLog as any as UnifiAPLight, contextAccessory as any as PlatformAccessory)
-			expect(logSpy.warn).toHaveBeenCalledWith('[Accessory] Accessory Information Service not found for Test AP (ap1)')
-		})
-
-		it('should set all AccessoryInformation characteristics when service is present', () => {
-			const infoService = {
-				setCharacteristic: vi.fn().mockReturnThis(),
-			}
-			const accessoryWithInfo = {
-				...mockAccessory,
-				getService: vi.fn((svc) => svc === mockPlatform.Service.AccessoryInformation ? infoService : mockService),
-			}
-			new UniFiAP(mockPlatform as any as UnifiAPLight, accessoryWithInfo as any as PlatformAccessory)
-			expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.Manufacturer, 'Ubiquiti')
-			expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.Model, mockAccessory.context.accessPoint.model)
-			expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.SerialNumber, mockAccessory.context.accessPoint.serial)
-			expect(infoService.setCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.FirmwareRevision, mockAccessory.context.accessPoint.version)
-		})
-
-		it('should add Lightbulb service if not found', () => {
-			const lightbulbMissing = { ...mockAccessory, getService: vi.fn(() => undefined), addService: vi.fn(() => mockService) }
-			new UniFiAP(mockPlatform as any as UnifiAPLight, lightbulbMissing as any as PlatformAccessory)
-			expect(lightbulbMissing.addService).toHaveBeenCalled()
-		})
-
-		it('should not add Lightbulb service if already present', () => {
-			const getServiceSpy = vi.fn(() => mockService)
-			const addServiceSpy = vi.fn(() => mockService)
-			const accessoryWithLightbulb = { ...mockAccessory, getService: getServiceSpy, addService: addServiceSpy }
-			new UniFiAP(mockPlatform as any as UnifiAPLight, accessoryWithLightbulb as any as PlatformAccessory)
-			expect(getServiceSpy).toHaveBeenCalledWith(mockPlatform.Service.Lightbulb)
-			expect(addServiceSpy).not.toHaveBeenCalled()
-		})
+	it.each([
+		{ status: 500, data: {} },
+		{ status: 200, data: { meta: { rc: 'error' } } },
+		{ status: 200, data: {} },
+	])('rejects an unaccepted controller response: %j', async response => {
+		const f = fixture()
+		f.platform.sessionManager.request.mockResolvedValue(response)
+		await expect(f.light.getCharacteristic(Characteristic.On).handleSetRequest(true, undefined)).rejects.toBe(-70402)
+		expect(f.light.getCharacteristic(Characteristic.On).value).not.toBe(true)
+		expect(f.cache.getDeviceById('test-ap')).toBeUndefined()
+		expect(f.cache.getDeviceById('other-ap')).toBeDefined()
 	})
 
-	describe('setOn Behavior', () => {
-		it('should handle setOn and update cache', async () => {
-			await accessory.setOn(true)
-			expect(mockPlatform.sessionManager.request).toHaveBeenCalled()
-			expect(mockPlatform.getDeviceCache().setDevices).toHaveBeenCalled()
-		})
-
-		it('setOn: should log error and not update cache on non-200 response', async () => {
-			mockPlatform.sessionManager.request.mockResolvedValueOnce({ status: 500 })
-			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[Accessory] Failed to set LED state for Test AP (ap1): Unexpected response status 500')
-			expect(sharedMockCache.setDevices).not.toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ led_override: 'on' })]))
-		})
-
-		it('setOn: should handle UnifiAuthError and set Not Responding', async () => {
-			const error = new (class extends Error { })()
-			Object.setPrototypeOf(error, { constructor: { name: 'UnifiAuthError' } })
-			mockPlatform.sessionManager.request.mockRejectedValueOnce(error)
-			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: [object Error]')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('setOn: should handle generic error and set Not Responding', async () => {
-			mockPlatform.sessionManager.request.mockRejectedValueOnce({ message: 'fail' })
-			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: fail')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('setOn: should update ledSettings for udm', async () => {
-			const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: { enabled: false } }
-			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory)
-			await accessory.setOn(true)
-			expect(udm.ledSettings.enabled).toBe(true)
-		})
-
-		it('setOn: should update led_override for uap', async () => {
-			const uap = { ...mockAccessory.context.accessPoint, type: 'uap', led_override: 'off' }
-			sharedMockCache.getDeviceById.mockReturnValue(uap)
-			accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory)
-			await accessory.setOn(true)
-			expect(uap.led_override).toBe('on')
-		})
-
-		it('setOn: should handle UnifiApiError and set Not Responding', async () => {
-			class UnifiApiError extends Error { constructor(msg: string) { super(msg) } }
-			mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiApiError('api error'))
-			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: api error')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('setOn: should handle UnifiNetworkError and set Not Responding', async () => {
-			class UnifiNetworkError extends Error { constructor(msg: string) { super(msg) } }
-			mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiNetworkError('network error'))
-			await accessory.setOn(true)
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: setOn for Test AP (ap1)]: network error')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('setOn: should not throw if udm has no ledSettings', async () => {
-			const udm = { ...mockAccessory.context.accessPoint, type: 'udm' }
-			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory)
-			await expect(accessory.setOn(true)).resolves.not.toThrow()
-		})
-
-		it('setOn: should clear device cache on network/API error', async () => {
-			class UnifiNetworkError extends Error { constructor(msg: string) { super(msg) } }
-			mockPlatform.sessionManager.request.mockRejectedValueOnce(new UnifiNetworkError('network error'))
-			await accessory.setOn(true)
-			expect(mockPlatform.getDeviceCache().clear).toHaveBeenCalled()
-		})
+	it('reports a failed network write to HomeKit instead of acknowledging it', async () => {
+		const f = fixture()
+		f.platform.sessionManager.request.mockRejectedValue(new Error('Synthetic network failure'))
+		const on = f.light.getCharacteristic(Characteristic.On)
+		await expect(on.handleSetRequest(true, undefined)).rejects.toBe(-70402)
+		expect(on.statusCode).toBe(-70402)
 	})
 
-	describe('getOn Behavior', () => {
-		it('should handle getOn for uap', async () => {
-			const result = await accessory.getOn()
-			expect(result).toBe(true)
+	it('uses current site and preserves a refresh that finishes during the write', async () => {
+		const f = fixture()
+		f.cache.setDevice({ ...device, site: 'new-site', version: '2' })
+		f.platform.sessionManager.request.mockImplementation(async () => {
+			f.cache.setDevice({ ...device, site: 'new-site', version: '3' })
+			return { status: 200, data: { meta: { rc: 'ok' } } }
 		})
-
-		it('should handle getOn for udm', async () => {
-			const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: { enabled: true } }
-			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			sharedMockCache.getAllDevices.mockReturnValue([udm])
-			accessory = new UniFiAP(mockPlatform as any as UnifiAPLight, mockAccessory as any as PlatformAccessory)
-			const result = await accessory.getOn()
-			expect(result).toBe(true)
-		})
-
-		it('getOn: should log error and set Not Responding if device not in cache', async () => {
-			sharedMockCache.getDeviceById.mockImplementation(() => { return undefined as any })
-			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn]: Device not found in cache')
-			const calls = mockPlatform.log.error.mock.calls
-			expect(calls[0][0]).toBe('[API] Error [site: default, endpoint: getOn]: Device not found in cache')
-		})
-
-		it('getOn: should log error and set Not Responding if ledSettings.enabled is undefined', async () => {
-			const udm = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: {} }
-			sharedMockCache.getDeviceById.mockReturnValue(udm)
-			resetErrorState()
-			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn]: \'enabled\' property in \'ledSettings\' is undefined')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('getOn: should handle UnifiAuthError and set Not Responding', async () => {
-			class UnifiAuthError extends Error { constructor(msg: string) { super(msg) } }
-			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiAuthError('auth error') })
-			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]: auth error')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('getOn: should handle UnifiApiError and set Not Responding', async () => {
-			class UnifiApiError extends Error { constructor(msg: string) { super(msg) } }
-			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiApiError('api error') })
-			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]: api error')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('getOn: should handle UnifiNetworkError and set Not Responding', async () => {
-			class UnifiNetworkError extends Error { constructor(msg: string) { super(msg) } }
-			sharedMockCache.getDeviceById.mockImplementation(() => { throw new UnifiNetworkError('network error') })
-			await expect(accessory.getOn()).rejects.toThrow('Not Responding')
-			expect(mockPlatform.log.error).toHaveBeenCalledWith('[API] Error [site: default, endpoint: getOn for Test AP (ap1)]: network error')
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
-
-		it('getOn: should return correct value for udm with ledSettings.enabled true/false', async () => {
-			const udmOn = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: { enabled: true } }
-			sharedMockCache.getDeviceById.mockReturnValue(udmOn)
-			let result = await accessory.getOn()
-			expect(result).toBe(true)
-			const udmOff = { ...mockAccessory.context.accessPoint, type: 'udm', ledSettings: { enabled: false } }
-			sharedMockCache.getDeviceById.mockReturnValue(udmOff)
-			result = await accessory.getOn()
-			expect(result).toBe(false)
-		})
-
-		it('getOn: should return correct value for uap with led_override on/off', async () => {
-			const uapOn = { ...mockAccessory.context.accessPoint, type: 'uap', led_override: 'on' }
-			sharedMockCache.getDeviceById.mockReturnValue(uapOn)
-			let result = await accessory.getOn()
-			expect(result).toBe(true)
-			const uapOff = { ...mockAccessory.context.accessPoint, type: 'uap', led_override: 'off' }
-			sharedMockCache.getDeviceById.mockReturnValue(uapOff)
-			result = await accessory.getOn()
-			expect(result).toBe(false)
-		})
+		await f.control.setOn(true)
+		expect(f.platform.sessionManager.request.mock.calls[0][0].url).toContain('/s/new-site/')
+		expect(f.cache.getDeviceById('test-ap')).toMatchObject({ site: 'new-site', version: '3', led_override: 'on' })
 	})
 
-	describe('markNotResponding & markNotRespondingForAccessory', () => {
-		it('markNotResponding: should updateCharacteristic with Not Responding error', () => {
-			markAccessoryNotResponding(mockPlatform as any, mockAccessory as any)
-			expect(mockService.updateCharacteristic).toHaveBeenCalledWith(
-				mockPlatform.Characteristic.On,
-				new Error('Not Responding')
-			)
-		})
+	it('does not let a delayed inherited-state read overwrite a newer HomeKit write', async () => {
+		const f = fixture({ ...device, led_override: 'default' })
+		let finish!: (value: boolean) => void
+		const pending = new Promise<boolean>(resolve => { finish = resolve })
+		f.platform.sessionManager.getSiteLedEnabled.mockReturnValue(pending as any)
+		new UniFiAP(f.platform as any, f.accessory as any)
+		const on = f.light.getCharacteristic(Characteristic.On)
+		await on.handleSetRequest(true, undefined)
+		finish(false)
+		await Promise.resolve()
+		await Promise.resolve()
+		expect(on.value).toBe(true)
+	})
 
-		it('markNotResponding: should not throw if service is missing', () => {
-			const noServiceAccessory = { ...mockAccessory, getService: vi.fn(() => undefined) }
-			expect(() => markAccessoryNotResponding(mockPlatform as any, noServiceAccessory as any)).not.toThrow()
+	it('does not overwrite a device moved to another site during a write', async () => {
+		const f = fixture()
+		f.platform.sessionManager.request.mockImplementation(async () => {
+			f.cache.setDevice({ ...device, site: 'new-site', led_override: 'off' })
+			return { status: 200, data: { meta: { rc: 'ok' } } }
 		})
+		await f.control.setOn(true)
+		expect(f.cache.getDeviceById('test-ap')).toMatchObject({ site: 'new-site', led_override: 'off' })
+	})
 
-		it('should set Not Responding on the On characteristic if service exists', () => {
-			const service = {
-				updateCharacteristic: vi.fn(),
-				setCharacteristic: vi.fn(),
-			}
-			const accessoryWithService = { ...mockAccessory, getService: vi.fn((svc) => svc === mockPlatform.Service.Lightbulb ? service : undefined) }
-			markAccessoryNotResponding(mockPlatform as any, accessoryWithService as any)
-			expect(service.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
+	it.each(['default', undefined])('resolves inherited LED state: %s', async led_override => {
+		const f = fixture({ ...device, led_override } as any)
+		expect(await f.control.getOn()).toBe(true)
+		f.platform.sessionManager.getSiteLedEnabled.mockResolvedValue(false)
+		expect(await f.control.getOn()).toBe(false)
+		expect(f.platform.sessionManager.getSiteLedEnabled).toHaveBeenCalledWith('default')
+	})
 
-		it('should log a warning if AccessoryInformation service is missing in markNotResponding', () => {
-			const accessoryNoService = { ...mockAccessory, getService: vi.fn(() => undefined) }
-			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
-			const platformWithLog = { ...mockPlatform, log: logSpy }
-			markAccessoryNotResponding(platformWithLog as any, accessoryNoService as any)
-			expect(logSpy.warn).toHaveBeenCalledWith('[Accessory] Accessory Information Service not found for Test AP (ap1)')
-		})
+	it.each(['on', 'off'])('reads explicit state without a site-settings request: %s', async led_override => {
+		const f = fixture({ ...device, led_override })
+		expect(await f.control.getOn()).toBe(led_override === 'on')
+		expect(f.platform.sessionManager.getSiteLedEnabled).not.toHaveBeenCalled()
+	})
 
-		it('markNotRespondingForAccessory: should set Not Responding if service exists', () => {
-			const service = {
-				updateCharacteristic: vi.fn(),
-				setCharacteristic: vi.fn(),
-			}
-			const accessoryWithService = { ...mockAccessory, getService: vi.fn((svc) => svc === mockPlatform.Service.Lightbulb ? service : undefined) }
-			markAccessoryNotResponding(mockPlatform as any, accessoryWithService as any)
-			expect(service.updateCharacteristic).toHaveBeenCalledWith(mockPlatform.Characteristic.On, new Error('Not Responding'))
-		})
+	it('reports unknown inherited state as unavailable', async () => {
+		const f = fixture({ ...device, led_override: 'default' })
+		f.platform.sessionManager.getSiteLedEnabled.mockRejectedValue(new Error('Setting unavailable'))
+		await expect(f.control.getOn()).rejects.toThrow('Not Responding')
+	})
 
-		it('markNotRespondingForAccessory: should log a warning if service is missing', () => {
-			const accessoryNoService = {
-				...mockAccessory,
-				getService: vi.fn(() => undefined),
-				displayName: 'NoServiceAP',
-				context: { accessPoint: { ...mockAccessory.context.accessPoint, _id: 'ap2', name: 'NoServiceAP', site: 'default' } },
-			}
-			const logSpy = { ...mockPlatform.log, warn: vi.fn() }
-			const platformWithLog = { ...mockPlatform, log: logSpy, Service: mockPlatform.Service, Characteristic: mockPlatform.Characteristic }
-			markAccessoryNotResponding(platformWithLog as any, accessoryNoService as any)
-			expect(logSpy.warn).toHaveBeenCalledWith('[Accessory] Accessory Information Service not found for NoServiceAP (ap2)')
-		})
+	it('recovers a cache miss once, then returns the recovered state', async () => {
+		const f = fixture()
+		f.cache.removeDevice('test-ap')
+		f.platform.forceImmediateCacheRefresh.mockImplementation(async () => { f.cache.setDevice({ ...device, led_override: 'on' }) })
+		expect(await f.control.getOn()).toBe(true)
+		expect(f.platform.forceImmediateCacheRefresh).toHaveBeenCalledOnce()
+	})
+
+	it('rejects a missing device after one unsuccessful recovery', async () => {
+		const f = fixture()
+		f.cache.removeDevice('test-ap')
+		await expect(f.control.getOn()).rejects.toThrow('Not Responding')
+		expect(f.platform.forceImmediateCacheRefresh).toHaveBeenCalledOnce()
+	})
+
+	it('keeps the existing UDM payload and reads its boolean state', async () => {
+		const f = fixture({ ...device, type: 'udm', ledSettings: { enabled: false } } as any)
+		await f.control.setOn(true)
+		expect(f.platform.sessionManager.request.mock.calls[0][0].data).toEqual({ ledSettings: { enabled: true } })
+		expect(await f.control.getOn()).toBe(true)
 	})
 })

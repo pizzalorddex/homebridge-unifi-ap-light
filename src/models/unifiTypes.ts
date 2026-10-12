@@ -38,6 +38,8 @@ export interface UnifiAPLightConfig extends PlatformConfig {
 	includeIds?: string[]
 	excludeIds?: string[]
 	refreshIntervalMinutes?: number
+	verifySsl?: boolean
+	caFile?: string
 }
 
 export class UnifiApiError extends Error {

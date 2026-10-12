@@ -48,96 +48,80 @@ export class UniFiAP {
 		this.service.getCharacteristic(this.platform.Characteristic.On)
 			.onSet(this.setOn.bind(this))
 			.onGet(this.getOn.bind(this))
+
+		// A successful refresh must also clear a previous HomeKit error status.
+		const stateRecord = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
+		void this.getOn().then(state => {
+			if (!this.platform.isShuttingDown && stateRecord && this.platform.getDeviceCache().getDeviceById(this.accessPoint._id) === stateRecord) {
+				this.service.updateCharacteristic(this.platform.Characteristic.On, state)
+			}
+		}).catch(() => {})
+	}
+
+	private async currentDevice(): Promise<UnifiDevice> {
+		let device = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
+		if (!device) {
+			await this.platform.forceImmediateCacheRefresh()
+			device = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
+		}
+		if (!device) {
+			throw new Error('Device not found in cache')
+		}
+		return device
 	}
 
 	async setOn(value: CharacteristicValue): Promise<void> {
-		const isUdmDevice = this.accessPoint.type === 'udm'
-		const site = this.accessPoint.site ?? 'default'
-		const data = isUdmDevice
-			? { ledSettings: { enabled: value } }
-			: { led_override: value ? 'on' : 'off' }
-
-		const endpoint = this.platform.sessionManager.getApiHelper().getDeviceUpdateEndpoint(site, this.accessPoint._id)
 		try {
-			const response = await this.platform.sessionManager.request({
-				method: 'put',
-				url: endpoint,
-				data: data,
-			})
-			if (response.status === 200) {
-				this.platform.log.debug(`[Accessory] Successfully set LED state for ${this.accessPoint.name} (${this.accessPoint._id}) to ${value ? 'on' : 'off'}.`)
-				if (isUdmDevice && this.accessPoint.ledSettings) {
-					this.accessPoint.ledSettings.enabled = Boolean(value)
-				} else {
-					this.accessPoint.led_override = value ? 'on' : 'off'
-				}
-				this.platform.getDeviceCache().setDevices([
-					...this.platform.getDeviceCache().getAllDevices().filter((d: UnifiDevice) => d._id !== this.accessPoint._id),
-					this.accessPoint
-				])
-				return
-			} else {
-				this.platform.log.error(`[Accessory] Failed to set LED state for ${this.accessPoint.name} (${this.accessPoint._id}): Unexpected response status ${response.status}`)
+			const device = await this.currentDevice()
+			const site = device.site ?? 'default'
+			const enabled = Boolean(value)
+			const data = device.type === 'udm'
+				? { ledSettings: { enabled } }
+				: { led_override: enabled ? 'on' : 'off' }
+			const endpoint = this.platform.sessionManager.getApiHelper().getDeviceUpdateEndpoint(site, device._id)
+			const response = await this.platform.sessionManager.request({ method: 'put', url: endpoint, data })
+			if (response.status !== 200 || response.data?.meta?.rc !== 'ok') {
+				throw new Error('Controller did not accept the LED update')
 			}
+			// A refresh may finish while the write is in flight. Preserve its metadata.
+			const latest = this.platform.getDeviceCache().getDeviceById(device._id)
+			if (latest && latest.site === device.site) {
+				this.accessPoint = latest.type === 'udm'
+					? { ...latest, ledSettings: { ...latest.ledSettings, enabled } }
+					: { ...latest, led_override: enabled ? 'on' : 'off' }
+				this.platform.getDeviceCache().setDevice(this.accessPoint)
+			}
+			this.platform.log.debug(`[Accessory] Controller accepted LED update for ${device.name}.`)
 		} catch (error) {
-			errorHandler(
-				this.platform.log,
-				error,
-				{
-					site: this.accessPoint.site,
-					endpoint: `setOn for ${this.accessPoint.name} (${this.accessPoint._id})`
-				}
-			)
+			errorHandler(this.platform.log, error, { endpoint: 'setOn' })
 			markAccessoryNotResponding(this.platform, this.accessory)
-			this.platform.getDeviceCache().clear()
-			await this.platform.forceImmediateCacheRefresh()
+			this.platform.getDeviceCache().removeDevice(this.accessPoint._id)
+			throw new Error('Not Responding')
 		}
 	}
 
 	async getOn(): Promise<CharacteristicValue> {
-		this.platform.log.debug(`[Accessory] HomeKit GET called for ${this.accessPoint.name} (${this.accessPoint._id})`)
 		try {
-			const cached = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
-			if (!cached) {
-				errorHandler(
-					this.platform.log,
-					{ name: 'DeviceCacheError', message: 'Device not found in cache' },
-					{ site: this.accessPoint.site, endpoint: 'getOn' }
-				)
-				markAccessoryNotResponding(this.platform, this.accessory)
-				await this.platform.forceImmediateCacheRefresh()
-				throw new Error('Not Responding')
-			}
-			if (cached.type === 'udm') {
-				if (cached.ledSettings && typeof cached.ledSettings.enabled !== 'undefined') {
-					const isOn = cached.ledSettings.enabled
-					this.platform.log.debug(`[Accessory] Retrieved LED state for ${cached.name} (${cached._id}): ${isOn ? 'on' : 'off'}`)
-					return isOn
-				} else {
-					errorHandler(
-						this.platform.log,
-						{ name: 'DeviceCacheError', message: '\'enabled\' property in \'ledSettings\' is undefined' },
-						{ site: this.accessPoint.site, endpoint: 'getOn' }
-					)
-					markAccessoryNotResponding(this.platform, this.accessory)
-					throw new Error('Not Responding')
+			const device = await this.currentDevice()
+			if (device.type === 'udm') {
+				if (typeof device.ledSettings?.enabled !== 'boolean') {
+					throw new Error('LED state is unavailable')
 				}
-			} else {
-				const isOn = cached.led_override === 'on'
-				this.platform.log.debug(`[Accessory] Retrieved LED state for ${cached.name} (${cached._id}): ${isOn ? 'on' : 'off'}`)
-				return isOn
+				return device.ledSettings.enabled
 			}
+			if (device.led_override === 'on') {
+				return true
+			}
+			if (device.led_override === 'off') {
+				return false
+			}
+			if (device.led_override === 'default' || device.led_override === undefined) {
+				return await this.platform.sessionManager.getSiteLedEnabled(device.site ?? 'default')
+			}
+			throw new Error('LED state is unavailable')
 		} catch (error) {
-			errorHandler(
-				this.platform.log,
-				error,
-				{
-					site: this.accessPoint.site,
-					endpoint: `getOn for ${this.accessPoint.name} (${this.accessPoint._id})`
-				}
-			)
+			errorHandler(this.platform.log, error, { endpoint: 'getOn' })
 			markAccessoryNotResponding(this.platform, this.accessory)
-			await this.platform.forceImmediateCacheRefresh()
 			throw new Error('Not Responding')
 		}
 	}
