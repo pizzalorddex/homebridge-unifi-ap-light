@@ -75,6 +75,12 @@
         "title": "Trusted CA file",
         "type": "string",
         "description": "Optional PEM CA certificate path on the Homebridge host. Enables certificate verification unless explicitly disabled."
+      },
+      "enableRgb": {
+        "title": "Enable RGB controls",
+        "type": "boolean",
+        "default": false,
+        "description": "Experimental colour and brightness controls for APs reporting RGB LED hardware. Other APs keep on/off controls."
       }
     }
   }

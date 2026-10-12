@@ -41,6 +41,7 @@ export interface UnifiAPLightConfig extends PlatformConfig {
 	includeIds?: string[]
 	excludeIds?: string[]
 	refreshIntervalMinutes?: number
+	enableRgb?: boolean
 	verifySsl?: boolean
 	caFile?: string
 }
