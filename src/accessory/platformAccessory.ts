@@ -5,13 +5,24 @@ import type { UnifiAPLight } from '../platform.js'
 
 /** Exposes one UniFi access point light to HomeKit. */
 export class UniFiAP {
-	accessPoint: UnifiDevice
+	accessPoint!: UnifiDevice
 	private service: Service
+	private stopped = false
 
 	constructor(
 		private readonly platform: UnifiAPLight,
 		private readonly accessory: PlatformAccessory,
 	) {
+		this.service =
+			this.accessory.getService(this.platform.Service.Lightbulb) ||
+			this.accessory.addService(this.platform.Service.Lightbulb)
+		this.refresh()
+	}
+
+	refresh(): void {
+		if (this.stopped) {
+			return
+		}
 		const cached = this.platform.getDeviceCache().getDeviceById(this.accessory.context.accessPoint._id)
 		this.accessPoint = cached || this.accessory.context.accessPoint
 
@@ -39,9 +50,6 @@ export class UniFiAP {
 			this.platform.log.warn(`[Accessory] Accessory Information Service not found for ${this.accessPoint.name} (${this.accessPoint._id})`)
 		}
 
-		this.service =
-			this.accessory.getService(this.platform.Service.Lightbulb) ||
-			this.accessory.addService(this.platform.Service.Lightbulb)
 
 		this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessPoint.name)
 
@@ -52,13 +60,20 @@ export class UniFiAP {
 		// A successful refresh must also clear a previous HomeKit error status.
 		const stateRecord = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 		void this.getOn().then(state => {
-			if (!this.platform.isShuttingDown && stateRecord && this.platform.getDeviceCache().getDeviceById(this.accessPoint._id) === stateRecord) {
+			if (!this.stopped && !this.platform.isShuttingDown && stateRecord && this.platform.getDeviceCache().getDeviceById(this.accessPoint._id) === stateRecord) {
 				this.service.updateCharacteristic(this.platform.Characteristic.On, state)
 			}
 		}).catch(() => {})
 	}
 
+	shutdown(): void {
+		this.stopped = true
+	}
+
 	private async currentDevice(): Promise<UnifiDevice> {
+		if (this.stopped || this.platform.isShuttingDown) {
+			throw new Error('LED updates stopped')
+		}
 		let device = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 		if (!device) {
 			await this.platform.forceImmediateCacheRefresh()

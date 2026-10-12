@@ -4,12 +4,29 @@ import type { PlatformAccessory } from 'homebridge'
 import type { UnifiDevice } from '../models/unifiTypes.js'
 import { PLATFORM_NAME, PLUGIN_NAME } from '../settings.js'
 
+const controls = new WeakMap<PlatformAccessory, UniFiAP>()
+
+function configureControl(platform: UnifiAPLight, accessory: PlatformAccessory): void {
+	const control = controls.get(accessory)
+	if (control) {
+		control.refresh()
+	} else {
+		controls.set(accessory, new UniFiAP(platform, accessory))
+	}
+}
+
+export function stopAccessoryControls(platform: UnifiAPLight): void {
+	for (const accessory of platform.accessories) {
+		controls.get(accessory)?.shutdown()
+	}
+}
+
 export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, uuid: string): PlatformAccessory {
 	const accessory = new platform.api.platformAccessory(accessPoint.name, uuid)
 	accessory.context.accessPoint = accessPoint
 	platform.accessories.push(accessory)
 	platform.log.info(`[Accessory] Added new accessory: ${accessPoint.name} (${accessPoint._id})`)
-	new UniFiAP(platform, accessory)
+	configureControl(platform, accessory)
 	try {
 		platform.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory])
 	} catch (err) {
@@ -21,11 +38,13 @@ export function createAndRegisterAccessory(platform: UnifiAPLight, accessPoint: 
 export function restoreAccessory(platform: UnifiAPLight, accessPoint: UnifiDevice, existingAccessory: PlatformAccessory): void {
 	platform.log.info(`[Discovery] Matched device to cached accessory: ${existingAccessory.displayName} (${accessPoint._id})`)
 	existingAccessory.context.accessPoint = accessPoint
-	new UniFiAP(platform, existingAccessory)
+	configureControl(platform, existingAccessory)
 	platform.api.updatePlatformAccessories([existingAccessory])
 }
 
 export function removeAccessory(platform: UnifiAPLight, accessory: PlatformAccessory): void {
+	controls.get(accessory)?.shutdown()
+	controls.delete(accessory)
 	const ap = accessory.context.accessPoint
 	platform.log.info(`[Exclusion] Removing accessory from cache: ${accessory.displayName} (${ap?._id})`)
 	try {

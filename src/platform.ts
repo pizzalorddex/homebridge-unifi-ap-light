@@ -5,6 +5,7 @@ import { SessionManager } from './utils/sessionManager.js'
 import { RecoveryManager } from './platform/recoveryManager.js'
 import { discoverDevices } from './platform/discovery.js'
 import { errorHandler } from './utils/errorHandler.js'
+import { stopAccessoryControls } from './accessory/accessoryFactory.js'
 
 export class UnifiAPLight implements DynamicPlatformPlugin {
 	public config: UnifiAPLightConfig
@@ -42,6 +43,7 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 		this.api.on('didFinishLaunching', this.handleDidFinishLaunching.bind(this))
 		this.api.on('shutdown', () => {
 			this.isShuttingDown = true
+			stopAccessoryControls(this)
 			if (this.refreshTimer) {
 				clearInterval(this.refreshTimer)
 				this.refreshTimer = null
