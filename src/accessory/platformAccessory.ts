@@ -66,9 +66,14 @@ export class UniFiAP {
 			.onGet(this.getOn.bind(this))
 
 		// A successful refresh must also clear a previous HomeKit error status.
+		const readGeneration = this.generation
 		const stateRecord = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 		void this.getOn().then(state => {
-			if (!this.stopped && !this.ledUpdates.busy && !this.platform.isShuttingDown && stateRecord && this.platform.getDeviceCache().getDeviceById(this.accessPoint._id) === stateRecord) {
+			const latest = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
+			const unchangedOn = this.rgbEnabled && latest?.site === stateRecord?.site &&
+				latest?.led_override === stateRecord?.led_override && latest?.ledSettings?.enabled === stateRecord?.ledSettings?.enabled
+			if (!this.stopped && !this.platform.isShuttingDown && readGeneration === this.generation && stateRecord &&
+				(latest === stateRecord || unchangedOn)) {
 				this.service.updateCharacteristic(this.platform.Characteristic.On, state)
 			}
 		}).catch(() => {})

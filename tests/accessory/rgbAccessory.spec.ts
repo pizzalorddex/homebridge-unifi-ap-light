@@ -323,4 +323,16 @@ describe('RGB accessory controls', () => {
 		expect(f.platform.sessionManager.request).not.toHaveBeenCalled()
 	})
 
+	it('keeps a delayed inherited On read valid when only RGB brightness changed', async () => {
+		vi.useFakeTimers()
+		const f = fixture({ led_override: 'default' })
+		let finish!: (value: boolean) => void
+		f.platform.sessionManager.getSiteLedEnabled.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+		await flush(f.control.setBrightness(30))
+		finish(true)
+		await vi.advanceTimersByTimeAsync(0)
+		expect(f.light.getCharacteristic(hap.Characteristic.On).value).toBe(true)
+		expect(f.platform.sessionManager.request).toHaveBeenCalledOnce()
+	})
+
 })
