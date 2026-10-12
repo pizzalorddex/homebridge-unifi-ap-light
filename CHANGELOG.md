@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0-alpha.1] - 2026-10-12
+
+- Add opt-in HomeKit colour and brightness controls for APs reporting LED-ring support.
+- Read capabilities from normal discovery without additional capability requests.
+- Batch concurrent LED changes, preserve untouched settings, and reject failed writes.
+- Keep existing on/off controls and accessory identities; RGB hardware confirmation is pending.
+
 ## [1.5.1] - 2026-10-12
 
 - Released the controller recovery, LED state, and authentication logging fixes
