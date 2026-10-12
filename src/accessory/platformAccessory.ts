@@ -216,10 +216,10 @@ export class UniFiAP {
 
 	private async setRgb(changes: LedChanges): Promise<void> {
 		const generation = this.generation
+		if (!this.rgbEnabled || this.stopped || this.platform.isShuttingDown) {
+			throw new Error('Not Responding')
+		}
 		try {
-			if (!this.rgbEnabled || this.stopped || this.platform.isShuttingDown) {
-				throw new Error('RGB controls are unavailable')
-			}
 			await this.ledUpdates.update(changes)
 		} catch (error) {
 			if (generation === this.generation && !this.stopped) {
@@ -234,7 +234,7 @@ export class UniFiAP {
 	private async writeRgbChanges(changes: LedChanges): Promise<void> {
 		const generation = this.generation
 		const device = await this.currentDevice()
-		if (!this.rgbEnabled || this.stopped || this.platform.isShuttingDown) {
+		if (generation !== this.generation || !this.rgbEnabled || this.stopped || this.platform.isShuttingDown) {
 			throw new Error('RGB controls are unavailable')
 		}
 		const data: Partial<Pick<UnifiDevice, 'led_override' | 'led_override_color' | 'led_override_color_brightness'>> = {}

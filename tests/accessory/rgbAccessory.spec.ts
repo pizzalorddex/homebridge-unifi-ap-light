@@ -298,4 +298,29 @@ describe('RGB accessory controls', () => {
 		expect(f.cache.getDeviceById(device._id)?.led_override_color).toBe('#0000ff')
 	})
 
+	it('rejects unsupported colour requests without invalidating working on/off controls', async () => {
+		const f = fixture({ model: 'U7PRO', hw_caps: 20480 })
+		await expect(f.control.setHue(120)).rejects.toThrow('Not Responding')
+		expect(await f.control.getOn()).toBe(true)
+		expect(f.cache.getDeviceById(device._id)).toBeDefined()
+		expect(f.light.getCharacteristic(hap.Characteristic.On).statusCode).toBe(0)
+		expect(f.platform.sessionManager.request).not.toHaveBeenCalled()
+	})
+
+	it('does not send a cancelled update after cache recovery changes firmware', async () => {
+		vi.useFakeTimers()
+		const f = fixture()
+		f.cache.clear()
+		f.platform.forceImmediateCacheRefresh.mockImplementation(async () => {
+			const recovered = { ...device, version: '2' }
+			f.cache.setDevice(recovered)
+			restoreAccessory(f.platform as any, recovered, f.accessory)
+		})
+		const result = Promise.allSettled([f.control.setHue(120)])
+		await vi.advanceTimersByTimeAsync(50)
+		expect((await result)[0].status).toBe('rejected')
+		expect(f.cache.getDeviceById(device._id)?.version).toBe('2')
+		expect(f.platform.sessionManager.request).not.toHaveBeenCalled()
+	})
+
 })
