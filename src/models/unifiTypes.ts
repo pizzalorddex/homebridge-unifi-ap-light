@@ -18,7 +18,10 @@ export interface UnifiDevice {
 	name: string
 	serial: string
 	version: string
+	hw_caps?: number
 	led_override?: string
+	led_override_color?: string
+	led_override_color_brightness?: number | string
 	ledSettings?: UnifiLedSettings
 	last_seen?: number
 	uptime?: number
