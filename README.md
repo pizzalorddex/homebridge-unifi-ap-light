@@ -3,8 +3,8 @@
 [![CI](https://github.com/pizzalorddex/homebridge-unifi-ap-light/actions/workflows/build.yml/badge.svg)](https://github.com/pizzalorddex/homebridge-unifi-ap-light/actions/workflows/build.yml)
 [![npm](https://img.shields.io/npm/v/homebridge-unifi-ap-light)](https://www.npmjs.com/package/homebridge-unifi-ap-light)
 
-This Homebridge plugin creates a switch for the light ring on each supported
-UniFi access point. It can discover APs across multiple sites and can include or
+This Homebridge plugin exposes the light ring on each supported UniFi access
+point in Apple Home, with on/off controls and optional RGB controls. It can discover APs across multiple sites and can include or
 exclude individual devices.
 
 ## Requirements
@@ -75,6 +75,31 @@ explicitly false. In Docker, mount the certificate and use its container path.
 
 Existing configurations continue to accept self-signed certificates. In that
 mode HTTPS encrypts traffic but does not verify the controller's identity.
+
+## Experimental RGB controls
+
+RGB prereleases add Apple's standard colour and brightness controls to the
+existing light accessory. No custom Homebridge colour picker is needed.
+
+After installing an RGB prerelease, enable **Enable RGB controls** in the
+plugin settings and restart its child bridge. In JSON, use `"enableRgb": true`.
+The setting defaults to false.
+
+The AP must report LED-ring support through its hardware capabilities.
+Saved colour fields alone do not enable RGB. APs without that capability,
+including U7 Pro devices with only on/off support, keep their existing controls.
+Capabilities come from normal discovery; there are no extra capability API
+requests. Firmware or capability changes are picked up during normal refreshes.
+
+RGB hardware behavior is awaiting owner confirmation. See
+[compatibility notes](docs/COMPATIBILITY.md) before trying it. Include the
+plugin, AP firmware, controller and Homebridge versions when reporting results;
+remove identifying data from logs.
+
+To return to stable, disable **Enable RGB controls** and restart the child
+bridge first. This removes the optional colour characteristics without changing
+accessory identity. Then use **Manage Version** to install the stable version.
+
 
 ## Troubleshooting
 

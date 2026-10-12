@@ -1,6 +1,6 @@
 # Compatibility
 
-The plugin is tested with these versions:
+The on/off functionality is tested with these versions:
 
 | Component | Version | Tested behavior |
 | --- | --- | --- |
@@ -13,6 +13,22 @@ UniFi OS Server 5.1.42 with Network 10.6.106 also passed physical-AP discovery,
 LED reads, and an unchanged-value LED write with the reliability patch in
 1.5.1. The automated write check sends the current LED value, so it does
 not toggle the light.
+
+## RGB prerelease scope
+
+The RGB controls have automated HomeKit, request-routing, conversion, batching
+and failure tests. Physical E7 colour and brightness behavior has not yet been
+verified for this prerelease. The controller capability flag is used by other
+UniFi integrations; it is not a guarantee for every model or firmware version.
+
+RGB requires an explicit `enableRgb` opt-in and a supported AP capability.
+The same local device update endpoint carries `led_override_color` and
+`led_override_color_brightness`. Hardware acceptance includes physical colour
+and brightness changes, not only a successful HTTP response or saved setting.
+
+The E7 request captures and hardware reports in
+[issue #7](https://github.com/pizzalorddex/homebridge-unifi-ap-light/issues/7)
+provided the protocol evidence for this feature.
 
 ## UniFi API use
 
