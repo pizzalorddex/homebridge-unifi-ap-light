@@ -13,6 +13,11 @@ export function markAccessoryNotResponding(platform: UnifiAPLight, accessory: Pl
 			platform.Characteristic.On,
 			new Error('Not Responding')
 		)
+		for (const characteristic of [platform.Characteristic.Hue, platform.Characteristic.Saturation, platform.Characteristic.Brightness]) {
+			if (service.testCharacteristic?.(characteristic)) {
+				service.updateCharacteristic(characteristic, new Error('Not Responding'))
+			}
+		}
 	} else {
 		const ap = accessory.context?.accessPoint
 		const name = ap?.name || accessory.displayName || 'Unknown'
