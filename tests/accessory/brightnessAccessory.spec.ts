@@ -22,6 +22,13 @@ function expectDimmable(light: hap.Service) {
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('Brightness-only AP controls', () => {
+	it.each([false, true])('does not expose colour on U7PRO even with both settings enabled: %s', rgb => {
+		const f = fixture()
+		f.platform.config.enableRgb = rgb
+		f.control.refresh()
+		expectDimmable(f.light)
+	})
+
 	it('adds only the native brightness characteristic without any network request', async () => {
 		const f = fixture()
 		expectDimmable(f.light)

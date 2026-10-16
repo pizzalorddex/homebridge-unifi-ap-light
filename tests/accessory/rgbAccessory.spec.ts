@@ -12,6 +12,59 @@ async function flush(promise: Promise<unknown>) {
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('RGB accessory controls', () => {
+	it.each([
+		{ rgb: false, brightness: false, expected: [] },
+		{ rgb: false, brightness: true, expected: ['Brightness'] },
+		{ rgb: true, brightness: false, expected: ['Brightness', 'Hue', 'Saturation'] },
+		{ rgb: true, brightness: true, expected: ['Brightness', 'Hue', 'Saturation'] },
+	])('exposes one coherent light for RGB=$rgb and brightness=$brightness', ({ rgb, brightness, expected }) => {
+		const f = fixture({}, rgb, UnifiApiType.UnifiOS, brightness)
+		for (const name of ['Brightness', 'Hue', 'Saturation'] as const) {
+			expect(f.light.testCharacteristic(hap.Characteristic[name])).toBe(expected.includes(name))
+		}
+		expect(f.accessory.services.filter(service => service.UUID === hap.Service.Lightbulb.UUID)).toHaveLength(1)
+		expect(f.platform.sessionManager.request).not.toHaveBeenCalled()
+	})
+
+	it('handles native colour, brightness and power together with both settings enabled', async () => {
+		vi.useFakeTimers()
+		const f = fixture({}, true, UnifiApiType.UnifiOS, true)
+		await flush(Promise.all([
+			f.light.getCharacteristic(hap.Characteristic.Hue).handleSetRequest(120, undefined),
+			f.light.getCharacteristic(hap.Characteristic.Saturation).handleSetRequest(100, undefined),
+			f.light.getCharacteristic(hap.Characteristic.Brightness).handleSetRequest(25, undefined),
+			f.light.getCharacteristic(hap.Characteristic.On).handleSetRequest(true, undefined),
+		]))
+		expect(f.platform.sessionManager.request).toHaveBeenCalledExactlyOnceWith({ method: 'put', url: '/proxy/network/api/s/default/rest/device/synthetic-ap',
+			data: { led_override_color: '#00ff00', led_override_color_brightness: 25, led_override: 'on' } })
+		expect(await f.control.getHue()).toBe(120)
+		expect(await f.control.getSaturation()).toBe(100)
+		expect(await f.control.getBrightness()).toBe(25)
+		expect(await f.control.getOn()).toBe(true)
+	})
+
+	it('preserves colour across later brightness changes and brightness across later colour changes', async () => {
+		vi.useFakeTimers()
+		const f = fixture({}, true, UnifiApiType.UnifiOS, true)
+		await flush(Promise.all([f.control.setHue(120), f.control.setSaturation(100)]))
+		await flush(f.control.setBrightness(10))
+		await flush(f.control.setHue(0))
+		expect(f.platform.sessionManager.request.mock.calls.map(call => call[0].data)).toEqual([
+			{ led_override_color: '#00ff00' }, { led_override_color_brightness: 10 }, { led_override_color: '#ff0000' },
+		])
+		expect(await f.control.getBrightness()).toBe(10)
+		expect(await f.control.getHue()).toBe(0)
+	})
+
+	it('keeps RGB brightness when the separate brightness-only setting is disabled', () => {
+		const f = fixture({}, true, UnifiApiType.UnifiOS, true)
+		f.platform.config.enableBrightness = false
+		f.control.refresh()
+		for (const c of [hap.Characteristic.Hue, hap.Characteristic.Saturation, hap.Characteristic.Brightness]) {
+			expect(f.light.testCharacteristic(c)).toBe(true)
+		}
+	})
+
 	it('uses native lightbulb characteristics only for opted-in capable APs', async () => {
 		const f = fixture()
 		for (const c of [hap.Characteristic.Hue, hap.Characteristic.Saturation, hap.Characteristic.Brightness]) {
