@@ -2,7 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge'
 import { UnifiDevice } from '../models/unifiTypes.js'
 import { markAccessoryNotResponding, errorHandler } from '../utils/errorHandler.js'
 import type { UnifiAPLight } from '../platform.js'
-import { hasRgbLedCapability } from './ledCapabilities.js'
+import { hasBrightnessLedCapability, hasRgbLedCapability } from './ledCapabilities.js'
 import { hexToHueSaturation, hueSaturationToHex, parseLedBrightness } from './ledColor.js'
 import { LedUpdateQueue, type LedChanges } from './ledUpdateQueue.js'
 
@@ -12,9 +12,10 @@ export class UniFiAP {
 	private service: Service
 	private stopped = false
 	private rgbEnabled = false
+	private brightnessEnabled = false
 	private capabilitySignature?: string
 	private generation = 0
-	private ledUpdates = new LedUpdateQueue(changes => this.writeRgbChanges(changes))
+	private ledUpdates = new LedUpdateQueue(changes => this.writeLedChanges(changes))
 
 	constructor(
 		private readonly platform: UnifiAPLight,
@@ -59,7 +60,7 @@ export class UniFiAP {
 
 
 		this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessPoint.name)
-		this.configureRgb()
+		this.configureLedControls()
 
 		this.service.getCharacteristic(this.platform.Characteristic.On)
 			.onSet(this.setOn.bind(this))
@@ -70,7 +71,7 @@ export class UniFiAP {
 		const stateRecord = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
 		void this.getOn().then(state => {
 			const latest = this.platform.getDeviceCache().getDeviceById(this.accessPoint._id)
-			const unchangedOn = this.rgbEnabled && latest?.site === stateRecord?.site &&
+			const unchangedOn = this.brightnessEnabled && latest?.site === stateRecord?.site &&
 				latest?.led_override === stateRecord?.led_override && latest?.ledSettings?.enabled === stateRecord?.ledSettings?.enabled
 			if (!this.stopped && !this.platform.isShuttingDown && readGeneration === this.generation && stateRecord &&
 				(latest === stateRecord || unchangedOn)) {
@@ -101,8 +102,8 @@ export class UniFiAP {
 	}
 
 	async setOn(value: CharacteristicValue): Promise<void> {
-		if (this.rgbEnabled) {
-			return this.setRgb({ on: Boolean(value) })
+		if (this.brightnessEnabled) {
+			return this.setLed({ on: Boolean(value) })
 		}
 		try {
 			const device = await this.currentDevice()
@@ -133,102 +134,112 @@ export class UniFiAP {
 		}
 	}
 
-	private configureRgb(): void {
+	private configureLedControls(): void {
 		const device = this.accessPoint
-		const signature = JSON.stringify([device.type, device.model, device.version, device.hw_caps, device.site, this.platform.config.enableRgb === true])
+		const signature = JSON.stringify([device.type, device.model, device.version, device.hw_caps, device.site, this.platform.config.enableRgb === true, this.platform.config.enableBrightness === true])
 		// Reconsider capability only when normal discovery supplies changed evidence.
 		if (signature !== this.capabilitySignature) {
 			this.capabilitySignature = signature
 			this.generation++
 			this.ledUpdates.close()
-			this.ledUpdates = new LedUpdateQueue(changes => this.writeRgbChanges(changes))
+			this.ledUpdates = new LedUpdateQueue(changes => this.writeLedChanges(changes))
 			this.rgbEnabled = this.platform.config.enableRgb === true && hasRgbLedCapability(device)
+			this.brightnessEnabled = this.rgbEnabled || (this.platform.config.enableBrightness === true && hasBrightnessLedCapability(device))
 		}
-		const characteristics = [this.platform.Characteristic.Hue, this.platform.Characteristic.Saturation, this.platform.Characteristic.Brightness]
-		if (!this.rgbEnabled) {
-			for (const characteristic of characteristics) {
-				if (this.service.testCharacteristic?.(characteristic)) {
-					this.service.removeCharacteristic(this.service.getCharacteristic(characteristic))
-				}
+		const controls = [
+			{ type: this.platform.Characteristic.Hue, enabled: this.rgbEnabled, get: () => this.getHue(), set: (value: CharacteristicValue) => this.setHue(value) },
+			{ type: this.platform.Characteristic.Saturation, enabled: this.rgbEnabled, get: () => this.getSaturation(), set: (value: CharacteristicValue) => this.setSaturation(value) },
+			{ type: this.platform.Characteristic.Brightness, enabled: this.brightnessEnabled, get: () => this.getBrightness(), set: (value: CharacteristicValue) => this.setBrightness(value) },
+		]
+		for (const control of controls) {
+			if (control.enabled) {
+				this.service.getCharacteristic(control.type).onGet(control.get).onSet(control.set)
+			} else if (this.service.testCharacteristic?.(control.type)) {
+				this.service.removeCharacteristic(this.service.getCharacteristic(control.type))
 			}
-			return
 		}
-		this.service.getCharacteristic(this.platform.Characteristic.Hue).onGet(() => this.getHue()).onSet(value => this.setHue(value))
-		this.service.getCharacteristic(this.platform.Characteristic.Saturation).onGet(() => this.getSaturation()).onSet(value => this.setSaturation(value))
-		this.service.getCharacteristic(this.platform.Characteristic.Brightness).onGet(() => this.getBrightness()).onSet(value => this.setBrightness(value))
 		if (!this.ledUpdates.busy) {
-			this.syncRgbCharacteristics(device)
+			this.syncLedCharacteristics(device)
 		}
 	}
 
-	private syncRgbCharacteristics(device: UnifiDevice): void {
-		try {
-			const colour = hexToHueSaturation(device.led_override_color)
-			this.service.updateCharacteristic(this.platform.Characteristic.Hue, colour.hue)
-			this.service.updateCharacteristic(this.platform.Characteristic.Saturation, colour.saturation)
-		} catch {
-			this.service.updateCharacteristic(this.platform.Characteristic.Hue, new Error('Not Responding'))
-			this.service.updateCharacteristic(this.platform.Characteristic.Saturation, new Error('Not Responding'))
+	private syncLedCharacteristics(device: UnifiDevice): void {
+		if (this.rgbEnabled) {
+			try {
+				const colour = hexToHueSaturation(device.led_override_color)
+				this.service.updateCharacteristic(this.platform.Characteristic.Hue, colour.hue)
+				this.service.updateCharacteristic(this.platform.Characteristic.Saturation, colour.saturation)
+			} catch {
+				this.service.updateCharacteristic(this.platform.Characteristic.Hue, new Error('Not Responding'))
+				this.service.updateCharacteristic(this.platform.Characteristic.Saturation, new Error('Not Responding'))
+			}
 		}
-		try {
-			this.service.updateCharacteristic(this.platform.Characteristic.Brightness, parseLedBrightness(device.led_override_color_brightness))
-		} catch {
-			this.service.updateCharacteristic(this.platform.Characteristic.Brightness, new Error('Not Responding'))
+		if (this.brightnessEnabled) {
+			try {
+				this.service.updateCharacteristic(this.platform.Characteristic.Brightness, parseLedBrightness(device.led_override_color_brightness))
+			} catch {
+				this.service.updateCharacteristic(this.platform.Characteristic.Brightness, new Error('Not Responding'))
+			}
 		}
 	}
 
 	async getHue(): Promise<CharacteristicValue> {
-		return this.getRgbValue('hue')
+		return this.getLedValue('hue')
 	}
 
 	async getSaturation(): Promise<CharacteristicValue> {
-		return this.getRgbValue('saturation')
+		return this.getLedValue('saturation')
 	}
 
 	async getBrightness(): Promise<CharacteristicValue> {
-		return this.getRgbValue('brightness')
+		return this.getLedValue('brightness')
 	}
 
-	private async getRgbValue(component: 'hue' | 'saturation' | 'brightness'): Promise<number> {
+	private async getLedValue(component: 'hue' | 'saturation' | 'brightness'): Promise<number> {
 		try {
 			const device = await this.currentDevice()
-			if (!this.rgbEnabled) {
-				throw new Error('RGB controls are unavailable')
+			if (!(component === 'brightness' ? this.brightnessEnabled : this.rgbEnabled)) {
+				throw new Error('LED control is unavailable')
 			}
 			return component === 'brightness' ? parseLedBrightness(device.led_override_color_brightness) : hexToHueSaturation(device.led_override_color)[component]
 		} catch (error) {
-			errorHandler(this.platform.log, error, { endpoint: 'getLedColour' })
+			errorHandler(this.platform.log, error, { endpoint: 'getLedState' })
 			throw new Error('Not Responding')
 		}
 	}
 
 	async setHue(value: CharacteristicValue): Promise<void> {
 		hueSaturationToHex(value, 100)
-		return this.setRgb({ hue: value as number })
+		return this.setLed({ hue: value as number })
 	}
 
 	async setSaturation(value: CharacteristicValue): Promise<void> {
 		hueSaturationToHex(0, value)
-		return this.setRgb({ saturation: value as number })
+		return this.setLed({ saturation: value as number })
 	}
 
 	async setBrightness(value: CharacteristicValue): Promise<void> {
 		if (typeof value !== 'number') {
 			throw new Error('Invalid LED brightness')
 		}
-		return this.setRgb({ brightness: parseLedBrightness(value) })
+		return this.setLed({ brightness: parseLedBrightness(value) })
 	}
 
-	private async setRgb(changes: LedChanges): Promise<void> {
+	private canApplyChanges(changes: LedChanges): boolean {
+		return this.brightnessEnabled &&
+			((changes.hue === undefined && changes.saturation === undefined) || this.rgbEnabled)
+	}
+
+	private async setLed(changes: LedChanges): Promise<void> {
 		const generation = this.generation
-		if (!this.rgbEnabled || this.stopped || this.platform.isShuttingDown) {
+		if (!this.canApplyChanges(changes) || this.stopped || this.platform.isShuttingDown) {
 			throw new Error('Not Responding')
 		}
 		try {
 			await this.ledUpdates.update(changes)
 		} catch (error) {
 			if (generation === this.generation && !this.stopped) {
-				errorHandler(this.platform.log, error, { endpoint: 'setLedColour' })
+				errorHandler(this.platform.log, error, { endpoint: 'setLedState' })
 				markAccessoryNotResponding(this.platform, this.accessory)
 				this.platform.getDeviceCache().removeDevice(this.accessPoint._id)
 			}
@@ -236,11 +247,11 @@ export class UniFiAP {
 		}
 	}
 
-	private async writeRgbChanges(changes: LedChanges): Promise<void> {
+	private async writeLedChanges(changes: LedChanges): Promise<void> {
 		const generation = this.generation
 		const device = await this.currentDevice()
-		if (generation !== this.generation || !this.rgbEnabled || this.stopped || this.platform.isShuttingDown) {
-			throw new Error('RGB controls are unavailable')
+		if (generation !== this.generation || !this.canApplyChanges(changes) || this.stopped || this.platform.isShuttingDown) {
+			throw new Error('LED control is unavailable')
 		}
 		const data: Partial<Pick<UnifiDevice, 'led_override' | 'led_override_color' | 'led_override_color_brightness'>> = {}
 		if (changes.on !== undefined) {
@@ -265,7 +276,7 @@ export class UniFiAP {
 		if (latest && latest.site === device.site) {
 			this.accessPoint = { ...latest, ...data }
 			this.platform.getDeviceCache().setDevice(this.accessPoint)
-			this.syncRgbCharacteristics(this.accessPoint)
+			this.syncLedCharacteristics(this.accessPoint)
 			const on = changes.on ?? (this.accessPoint.led_override === 'on' ? true : this.accessPoint.led_override === 'off' ? false : undefined)
 			if (on !== undefined) {
 				this.service.updateCharacteristic(this.platform.Characteristic.On, on)

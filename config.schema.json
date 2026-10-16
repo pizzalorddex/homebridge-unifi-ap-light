@@ -76,11 +76,17 @@
         "type": "string",
         "description": "Optional PEM CA certificate path on the Homebridge host. Enables certificate verification unless explicitly disabled."
       },
+      "enableBrightness": {
+        "title": "Enable brightness controls",
+        "type": "boolean",
+        "default": false,
+        "description": "Add an Apple Home brightness slider for U7 Pro and APs reporting RGB LED hardware. Other APs keep on/off controls."
+      },
       "enableRgb": {
         "title": "Enable RGB controls",
         "type": "boolean",
         "default": false,
-        "description": "Experimental colour and brightness controls for APs reporting RGB LED hardware. Other APs keep on/off controls."
+        "description": "Experimental Apple Home colour controls for APs reporting RGB LED hardware. Includes brightness."
       }
     }
   }

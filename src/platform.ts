@@ -79,6 +79,9 @@ export class UnifiAPLight implements DynamicPlatformPlugin {
 		if (config.enableRgb !== undefined && typeof config.enableRgb !== 'boolean') {
 			throw new UnifiConfigError('Config error: "enableRgb" must be a boolean.')
 		}
+		if (config.enableBrightness !== undefined && typeof config.enableBrightness !== 'boolean') {
+			throw new UnifiConfigError('Config error: "enableBrightness" must be a boolean.')
+		}
 		if (config.verifySsl !== undefined && typeof config.verifySsl !== 'boolean') {
 			throw new UnifiConfigError('Config error: "verifySsl" must be a boolean.')
 		}

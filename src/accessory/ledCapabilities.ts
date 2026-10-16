@@ -11,3 +11,8 @@ export function hasRgbLedCapability(device: Pick<UnifiDevice, 'type' | 'hw_caps'
 		capabilities >= 0 &&
 		(capabilities & LED_RING) !== 0
 }
+
+export function hasBrightnessLedCapability(device: Pick<UnifiDevice, 'type' | 'model' | 'hw_caps'>): boolean {
+	// U7 Pro supports dimming without the RGB ring bit. Other models need evidence.
+	return device.type === 'uap' && (device.model === 'U7PRO' || hasRgbLedCapability(device))
+}
