@@ -78,8 +78,8 @@ mode HTTPS encrypts traffic but does not verify the controller's identity.
 
 ## Brightness controls
 
-In a prerelease containing brightness-only support, enable **Enable brightness
-controls** in the plugin settings and restart its child bridge. In JSON, use
+In version 1.6.0-alpha.2 or later, enable **Enable brightness controls** in the
+plugin settings and restart its child bridge. In JSON, use
 `"enableBrightness": true`. The setting defaults to false.
 
 U7 Pro (`U7PRO`) and APs reporting RGB LED-ring hardware get a brightness slider
@@ -104,6 +104,11 @@ existing light accessory. No custom Homebridge colour picker is needed.
 After installing an RGB prerelease, enable **Enable RGB controls** in the
 plugin settings and restart its child bridge. In JSON, use `"enableRgb": true`.
 The setting defaults to false.
+
+On an RGB-capable AP, colour and brightness share the same Apple Home light
+accessory. Changing colour keeps the brightness level, and dimming keeps the
+colour. **Enable RGB controls** includes brightness even if the separate
+brightness setting is off. Both settings can be enabled together.
 
 The AP must report LED-ring support through its hardware capabilities.
 Saved colour fields alone do not enable RGB. APs without that capability,

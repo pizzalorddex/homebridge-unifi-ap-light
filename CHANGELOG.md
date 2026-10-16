@@ -2,10 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [1.6.0-alpha.2] - 2026-10-16
 
 - Add optional brightness-only controls for U7 Pro without exposing colour controls.
 - Keep existing HomeKit accessory identities and reuse batched LED updates.
+- Test combined colour, brightness and power updates with both optional controls enabled.
 
 ## [1.6.0-alpha.1] - 2026-10-12
 
