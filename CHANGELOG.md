@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Add optional brightness-only controls for U7 Pro without exposing colour controls.
+- Keep existing HomeKit accessory identities and reuse batched LED updates.
+
 ## [1.6.0-alpha.1] - 2026-10-12
 
 - Add opt-in HomeKit colour and brightness controls for APs reporting LED-ring support.

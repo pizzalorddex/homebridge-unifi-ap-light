@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/homebridge-unifi-ap-light)](https://www.npmjs.com/package/homebridge-unifi-ap-light)
 
 This Homebridge plugin exposes the light ring on each supported UniFi access
-point in Apple Home, with on/off controls and optional RGB controls. It can discover APs across multiple sites and can include or
+point in Apple Home, with on/off controls and optional brightness and colour controls. It can discover APs across multiple sites and can include or
 exclude individual devices.
 
 ## Requirements
@@ -76,6 +76,26 @@ explicitly false. In Docker, mount the certificate and use its container path.
 Existing configurations continue to accept self-signed certificates. In that
 mode HTTPS encrypts traffic but does not verify the controller's identity.
 
+## Brightness controls
+
+In a prerelease containing brightness-only support, enable **Enable brightness
+controls** in the plugin settings and restart its child bridge. In JSON, use
+`"enableBrightness": true`. The setting defaults to false.
+
+U7 Pro (`U7PRO`) and APs reporting RGB LED-ring hardware get a brightness slider
+on their existing light accessory in Apple Home. U7 Pro does not get colour
+controls. Other models keep on/off controls until their dimming support is
+confirmed; saved brightness values alone do not establish support.
+
+Use the standard Home controls to dim the light or save a brightness level in
+a scene or automation. The plugin does not run its own lighting schedule.
+Brightness changes preserve colour and on/off state; switching the light off
+preserves its brightness level. Changes made directly in UniFi appear after
+the next device-cache refresh.
+
+U7 Pro dimming has been tested through the controller API on physical hardware.
+See the [compatibility notes](docs/COMPATIBILITY.md) for versions and test scope.
+
 ## Experimental RGB controls
 
 RGB prereleases add Apple's standard colour and brightness controls to the
@@ -87,7 +107,8 @@ The setting defaults to false.
 
 The AP must report LED-ring support through its hardware capabilities.
 Saved colour fields alone do not enable RGB. APs without that capability,
-including U7 Pro devices with only on/off support, keep their existing controls.
+including U7 Pro devices, do not get colour controls. Their brightness setting
+is separate.
 Capabilities come from normal discovery; there are no extra capability API
 requests. Firmware or capability changes are picked up during normal refreshes.
 
@@ -96,8 +117,8 @@ RGB hardware behavior is awaiting owner confirmation. See
 plugin, AP firmware, controller and Homebridge versions when reporting results;
 remove identifying data from logs.
 
-To return to stable, disable **Enable RGB controls** and restart the child
-bridge first. This removes the optional colour characteristics without changing
+To return to stable, disable **Enable RGB controls** and **Enable brightness
+controls**, then restart the child bridge first. This removes the optional characteristics without changing
 accessory identity. Then use **Manage Version** to install the stable version.
 
 

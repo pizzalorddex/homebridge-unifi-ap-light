@@ -14,6 +14,20 @@ LED reads, and an unchanged-value LED write with the reliability patch in
 1.5.1. The automated write check sends the current LED value, so it does
 not toggle the light.
 
+## Brightness-only support
+
+U7 Pro (`U7PRO`) firmware 8.7.11.19419 was tested with UniFi OS Server 5.1.42
+and Network 10.6.106. A brightness-only device update from 100% to 10% visibly
+dimmed the LED; the original level was restored and verified. Green and white
+colour requests were accepted and read back by the controller, but the LED
+remained blue. Controller acceptance alone does not establish hardware support.
+
+The plugin's brightness-only integration has offline HomeKit tests. An Apple
+Home trial of this integration is still pending. The separate `enableBrightness`
+setting is off by default and adds brightness for U7 Pro and APs with the RGB
+ring flag. It does not infer support for U7 Pro Max or other models from a
+similar name or a saved brightness field. Firmware changes may affect behavior.
+
 ## RGB prerelease scope
 
 The RGB controls have automated HomeKit, request-routing, conversion, batching
